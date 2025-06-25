@@ -83,13 +83,18 @@ URL="${MODEL_URLS[$choice]}"
 # Ask if user wants background download
 read -p "Do you want to run the download in background? (y/N): " bg_choice
 if [[ "$bg_choice" =~ ^[Yy]$ ]]; then
-  echo "Starting $MODEL_NAME download in background..."
-  # Run with nohup so it continues if the terminal closes; write progress to a log
-  nohup curl -L -o "$MODELS_DIR/$OUTPUT_FILE" "$URL" > "$MODELS_DIR/$OUTPUT_FILE.log" 2>&1 &
+  echo "Starting $MODEL_NAME download in background (job)..."
+  # Run in background as a shell job attached to the current shell session
+  curl -L -o "$MODELS_DIR/$OUTPUT_FILE" "$URL" > "$MODELS_DIR/$OUTPUT_FILE.log" 2>&1 &
   pid=$!
+  # Save PID so it can be referenced later even if job control isn't available
+  echo "$pid" > "$MODELS_DIR/$OUTPUT_FILE.pid"
   echo "Download PID: $pid"
-  echo "Progress log: $MODELS_DIR/$OUTPUT_FILE.log"
-  echo "You can run 'tail -f \"$MODELS_DIR/$OUTPUT_FILE.log\"' to watch progress or 'wait $pid' to wait in foreground."
+  echo "Log file    : $MODELS_DIR/$OUTPUT_FILE.log"
+  echo
+  echo "Tips:"
+  echo "  • If you sourced this script ('. download_model.sh'), use 'jobs' then 'fg %%' to bring it back to foreground."
+  echo "  • Otherwise, monitor progress with 'tail -f \"$MODELS_DIR/$OUTPUT_FILE.log\"' or wait for completion using 'wait $pid'."
   exit 0
 fi
 
