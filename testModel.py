@@ -2,6 +2,7 @@ import requests
 import argparse
 import json
 import sys
+import time
 import curses
 import textwrap
 
@@ -113,9 +114,16 @@ def chat_cli(model_name: str):
                     history.append('Model: ')
                     answer_idx = len(history) - 1
                     redraw()
+                    start_time = time.time()
+                    tokens_seen = 0
                     for token in stream_vllm(prompt, model_name):
+                        tokens_seen += len(token)
                         history[answer_idx] += token
                         scroll = max(0, len(history) - chat_height)
+                        elapsed = max(time.time() - start_time, 1e-3)
+                        tps = tokens_seen / elapsed
+                        input_win.addstr(0, 2, f"TPS: {tps:.1f}".ljust(max_x - 4))
+                        input_win.refresh()
                         redraw()
                 current_input = ""
             elif ch in (curses.KEY_BACKSPACE, 127, 8):
