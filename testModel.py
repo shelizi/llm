@@ -67,10 +67,65 @@ def stream_vllm(prompt: str, model_name: str, temperature: float = 0.7):
         yield f"[Error] Request failed: {e}"
 
 
-def chat_cli(model_name: str):
-    """Interactive curses-based chat UI with scrollable history."""
+def chat_cli(model_name: str, max_context_tokens: int = 2048):
+    """Interactive curses-based chat UI with scrollable history.
+
+    Adds real-time TPS (tokens per second) statistics and displays the
+    size of the context sent to the model. The context consists of the
+    full conversation history truncated from the oldest message when the
+    approximate token count would exceed ``max_context_tokens``.
+    """
     import curses
     import textwrap
+
+    # --- Helper utilities (simple, fast approximations) ---
+    def _estimate_tokens(text: str) -> int:
+        """Rudimentary token estimation (whitespace split)."""
+        return len(text.split())
+
+    def _build_messages(conv, user_prompt: str):
+        """Build message list with history and respect token budget."""
+        system_msg = {"role": "system", "content": "You are a helpful assistant."}
+        messages = [system_msg]
+        # Remaining budget after adding system and upcoming user prompt
+        remaining = max_context_tokens - _estimate_tokens(system_msg["content"]) - _estimate_tokens(user_prompt)
+        for role, content in reversed(conv):  # newest → oldest
+            t = _estimate_tokens(content)
+            if remaining - t < 0:
+                break
+            messages.insert(1, {"role": role, "content": content})  # after system
+            remaining -= t
+        messages.append({"role": "user", "content": user_prompt})
+        return messages
+
+    def _stream_vllm_messages(messages, temperature: float = 0.7):
+        """Yield streamed tokens from vLLM given a full message list."""
+        payload = {
+            "model": model_name,
+            "messages": messages,
+            "max_tokens": 1024,
+            "temperature": temperature,
+            "stream": True,
+        }
+        try:
+            with requests.post(VLLM_API_URL, headers=HEADERS, data=json.dumps(payload), stream=True) as resp:
+                resp.raise_for_status()
+                for chunk in resp.iter_lines():
+                    if chunk:
+                        decoded = chunk.decode("utf-8")
+                        if decoded.startswith("data: "):
+                            json_part = decoded[len("data: "):]
+                            if json_part.strip() == "[DONE]":
+                                break
+                            try:
+                                data = json.loads(json_part)
+                                delta = data["choices"][0]["delta"]
+                                if "content" in delta:
+                                    yield delta["content"]
+                            except json.JSONDecodeError:
+                                continue
+        except requests.exceptions.RequestException as e:
+            yield f"[Error] Request failed: {e}"
 
     def _run(stdscr):
         curses.curs_set(1)
@@ -82,7 +137,8 @@ def chat_cli(model_name: str):
         input_win = curses.newwin(3, max_x, chat_height, 0)
         input_win.keypad(True)
 
-        history = []
+        history = []          # For UI rendering
+        conversation = []     # For building context (list of (role, content))
         scroll = 0
         current_input = ""
 
@@ -109,22 +165,33 @@ def chat_cli(model_name: str):
                 if prompt.lower() in ("exit", "quit"):
                     break
                 if prompt:
-                    history.append(f'You: {prompt}')
+                    # Prepare context
+                    messages = _build_messages(conversation, prompt)
+                    ctx_tokens = sum(_estimate_tokens(m["content"]) for m in messages)
+
+                    history.append(f"You: {prompt}")
                     redraw()
-                    history.append('Model: ')
+                    history.append("Model: ")
                     answer_idx = len(history) - 1
                     redraw()
+
                     start_time = time.time()
                     tokens_seen = 0
-                    for token in stream_vllm(prompt, model_name):
+                    assistant_reply = ""
+                    for token in _stream_vllm_messages(messages):
                         tokens_seen += len(token)
+                        assistant_reply += token
                         history[answer_idx] += token
                         scroll = max(0, len(history) - chat_height)
                         elapsed = max(time.time() - start_time, 1e-3)
                         tps = tokens_seen / elapsed
-                        input_win.addstr(0, 2, f"TPS: {tps:.1f}".ljust(max_x - 4))
+                        input_win.addstr(0, 2, f"TPS: {tps:.1f} | Ctx: {ctx_tokens}".ljust(max_x - 4))
                         input_win.refresh()
                         redraw()
+
+                    # Update conversation history for next turn
+                    conversation.append(("user", prompt))
+                    conversation.append(("assistant", assistant_reply))
                 current_input = ""
             elif ch in (curses.KEY_BACKSPACE, 127, 8):
                 current_input = current_input[:-1]
@@ -233,6 +300,7 @@ def main():
     parser.add_argument("prompt", nargs="?", type=str, help="The question you want to ask the large language model.")
     parser.add_argument("--stream", action="store_true", help="Receive the response in streaming mode.")
     parser.add_argument("-i", "--interactive", action="store_true", help="Start an interactive chat session (PageUp/PageDown to scroll history).")
+    parser.add_argument("--max-context", type=int, default=2048, help="Maximum approximate tokens to include in the context when chatting.")
     
     args = parser.parse_args()
 
@@ -243,7 +311,7 @@ def main():
 
         # Interactive chat
     if args.interactive or args.prompt is None:
-        chat_cli(model_name)
+        chat_cli(model_name, args.max_context)
         return
 
     print(f"💬 Sending question: \"{args.prompt}\"")
