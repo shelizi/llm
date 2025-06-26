@@ -43,6 +43,8 @@
 
 ## Embedding 模型選項
 
+參考:https://huggingface.co/spaces/mteb/leaderboard
+
 ### 1. intfloat/multilingual-e5-large-instruct
 **類型**：高效能通用型
 - **開發團隊**：微軟研究團隊
