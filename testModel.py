@@ -139,6 +139,7 @@ def chat_cli(model_name: str, max_context_tokens: int = 2048, default_system_pro
     def _run(stdscr):
         nonlocal system_prompt, max_context_tokens, max_tokens, temperature
         curses.curs_set(1)
+        curses.noecho()  # Disable automatic echoing of keys
         stdscr.keypad(True)
 
         max_y, max_x = stdscr.getmaxyx()
@@ -149,26 +150,37 @@ def chat_cli(model_name: str, max_context_tokens: int = 2048, default_system_pro
 
         history = []          # For UI rendering
         conversation = []     # For building context (list of (role, content))
-        scroll = 0
+        scroll = 0              # Topmost line currently shown
+        auto_scroll = True      # Whether we should keep view pinned to bottom
+        total_lines = 0         # Total rendered lines in chat_pad (updated in redraw)
         current_input = ""
         last_redraw = 0  # Track last UI refresh time
 
         def redraw():
-            chat_pad.clear()
+            """Redraw chat history pad and flush in a single screen update."""
+            nonlocal total_lines, scroll
+            chat_pad.erase()
             y = 0
             for msg in history:
                 for wrapped in textwrap.wrap(msg, max_x - 2):
                     if y < 999:
                         chat_pad.addstr(y, 0, wrapped[:max_x - 1])
                         y += 1
-            chat_pad.refresh(scroll, 0, 0, 0, chat_height - 1, max_x - 1)
+            total_lines = y
+            # Adjust scroll if auto-scroll is enabled or scroll beyond limits
+            scroll = max(0, min(scroll, max(0, total_lines - chat_height)))
+            chat_pad.noutrefresh(scroll, 0, 0, 0, chat_height - 1, max_x - 1)
+            curses.doupdate()
 
         redraw()
         while True:
-            input_win.clear()
+            input_win.erase()
             input_win.border()
-            input_win.addstr(1, 2, current_input[:max_x - 4])
-            input_win.refresh()
+            # Show only the tail part if input is wider than window
+            trimmed = current_input[-(max_x - 4):]
+            input_win.addstr(1, 2, trimmed)
+            input_win.noutrefresh()
+            curses.doupdate()
 
             ch = stdscr.getch()
             if ch in (10, 13):  # Enter
@@ -235,11 +247,13 @@ def chat_cli(model_name: str, max_context_tokens: int = 2048, default_system_pro
                         tokens_seen += len(token)
                         assistant_reply += token
                         history[answer_idx] += token
-                        scroll = max(0, len(history) - chat_height)
+                        if auto_scroll:
+                            scroll = max(0, total_lines - chat_height)
                         elapsed = max(time.time() - start_time, 1e-3)
                         tps = tokens_seen / elapsed
                         input_win.addstr(0, 2, f"TPS: {tps:.1f} | Ctx: {ctx_tokens}".ljust(max_x - 4))
-                        input_win.refresh()
+                        input_win.noutrefresh()
+                        curses.doupdate()
 
                         # Throttle screen refresh to at most ~20 FPS (50ms)
                         now = time.time()
@@ -252,14 +266,19 @@ def chat_cli(model_name: str, max_context_tokens: int = 2048, default_system_pro
                     conversation.append(("assistant", assistant_reply))
                     # Final redraw to ensure full answer visible
                     redraw()
+                # After completing an answer, re-enable auto-scroll
+                auto_scroll = True
                 current_input = ""
             elif ch in (curses.KEY_BACKSPACE, 127, 8):
                 current_input = current_input[:-1]
             elif ch == curses.KEY_PPAGE:
                 scroll = max(0, scroll - chat_height)
+                auto_scroll = False  # User is manually scrolling
                 redraw()
             elif ch == curses.KEY_NPAGE:
-                scroll = min(max(0, len(history) - chat_height), scroll + chat_height)
+                bottom = max(0, total_lines - chat_height)
+                scroll = min(bottom, scroll + chat_height)
+                auto_scroll = (scroll == bottom)
                 redraw()
             elif ch == 27:  # ESC
                 break
