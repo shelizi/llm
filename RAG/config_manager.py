@@ -39,9 +39,10 @@ class ConfigManager:
     def save_api_config(self, api_url: str, api_token: str, model_name: str = "gpt-3.5-turbo") -> bool:
         """保存API配置（加密）"""
         try:
+            # 對於本地模型，token 可以為空
             config_data = {
                 "api_url": api_url.strip(),
-                "api_token": api_token.strip(),
+                "api_token": api_token.strip() if api_token else "",
                 "model_name": model_name.strip(),
                 "enabled": True
             }
@@ -76,9 +77,12 @@ class ConfigManager:
             # 解析JSON
             config_data = json.loads(decrypted_data.decode('utf-8'))
             
-            # 驗證必要欄位
-            required_fields = ["api_url", "api_token", "model_name"]
+            # 驗證必要欄位（token 可選，用於本地模型）
+            required_fields = ["api_url", "model_name"]
             if all(field in config_data for field in required_fields):
+                # 確保 api_token 欄位存在，即使為空
+                if "api_token" not in config_data:
+                    config_data["api_token"] = ""
                 return config_data
             else:
                 logging.warning("配置文件缺少必要欄位")

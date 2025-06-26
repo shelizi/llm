@@ -347,14 +347,20 @@
                       </div>
                     </div>
                     <div class="mb-3">
-                      <label for="api_token" class="form-label">API Token</label>
+                      <label for="api_token" class="form-label">
+                        API Token 
+                        <small class="text-muted">(本地模型可留空)</small>
+                      </label>
                       <div class="input-group">
-                        <input type="password" class="form-control" id="api_token" placeholder="sk-..." required>
+                        <input type="password" class="form-control" id="api_token" placeholder="sk-... (本地模型可留空)">
                         <button class="btn btn-outline-secondary" type="button" id="toggle_token_visibility">
                           <i class="bi bi-eye"></i>
                         </button>
                       </div>
-                      <div class="form-text">您的 API 金鑰將被加密存儲</div>
+                      <div class="form-text">
+                        <i class="bi bi-info-circle"></i> 
+                        雲端服務需要 API 金鑰，本地模型（如 Ollama）通常可留空。金鑰將被加密存儲。
+                      </div>
                     </div>
                     <div class="d-flex gap-2">
                       <button type="button" class="btn btn-outline-primary" id="test_api_btn">
@@ -378,9 +384,18 @@
                       <ul class="list-unstyled small">
                         <li><i class="bi bi-check text-success"></i> 支援 OpenAI API</li>
                         <li><i class="bi bi-check text-success"></i> 支援 Azure OpenAI</li>
-                        <li><i class="bi bi-check text-success"></i> 支援 Claude API</li>
-                        <li><i class="bi bi-check text-success"></i> 支援本地部署的相容 API</li>
+                        <li><i class="bi bi-check text-success"></i> 支援 Ollama 本地模型</li>
+                        <li><i class="bi bi-check text-success"></i> 支援 LocalAI</li>
+                        <li><i class="bi bi-check text-success"></i> 支援其他相容 API</li>
                       </ul>
+                      <div class="mt-2">
+                        <strong>本地模型範例：</strong>
+                        <div class="small text-muted">
+                          <div>• Ollama: http://localhost:11434</div>
+                          <div>• LocalAI: http://localhost:8080</div>
+                          <div>• 模型: llama2, codellama, mistral 等</div>
+                        </div>
+                      </div>
                       <div class="mt-3">
                         <strong>安全性：</strong>
                         <p class="small text-muted mb-0">
@@ -949,15 +964,34 @@
       }
     });
     
+    // 檢查是否為本地模型
+    function isLocalModel(apiUrl) {
+      const url = apiUrl.toLowerCase();
+      return url.includes('localhost') || 
+             url.includes('127.0.0.1') || 
+             url.includes('ollama') || 
+             url.includes(':11434') || 
+             url.includes(':8080') ||
+             url.includes('localai');
+    }
+    
     // 測試API連接
     document.getElementById('test_api_btn').addEventListener('click', async function() {
       const apiUrl = document.getElementById('api_url').value.trim();
       const apiToken = document.getElementById('api_token').value.trim();
       const modelName = document.getElementById('model_name').value.trim();
       
-      if (!apiUrl || !apiToken || !modelName) {
-        alert('請填寫完整的API配置信息');
+      // 基本驗證
+      if (!apiUrl || !modelName) {
+        alert('請至少填寫 API 網址和模型名稱');
         return;
+      }
+      
+      // 對於非本地模型，檢查是否有 token
+      if (!isLocalModel(apiUrl) && !apiToken) {
+        if (!confirm('您似乎在配置雲端服務但未提供 API Token，這可能會導致連接失敗。是否繼續測試？')) {
+          return;
+        }
       }
       
       const btn = this;
@@ -1021,9 +1055,17 @@
       const apiToken = document.getElementById('api_token').value.trim();
       const modelName = document.getElementById('model_name').value.trim();
       
-      if (!apiUrl || !apiToken || !modelName) {
-        alert('請填寫完整的API配置信息');
+      // 基本驗證
+      if (!apiUrl || !modelName) {
+        alert('請至少填寫 API 網址和模型名稱');
         return;
+      }
+      
+      // 對於非本地模型，檢查是否有 token
+      if (!isLocalModel(apiUrl) && !apiToken) {
+        if (!confirm('您似乎在配置雲端服務但未提供 API Token，這可能會導致認證失敗。是否繼續保存？')) {
+          return;
+        }
       }
       
       const submitBtn = this.querySelector('button[type="submit"]');

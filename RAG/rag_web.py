@@ -404,7 +404,7 @@ async def get_api_config_status():
 @app.post("/save_api_config")
 async def save_api_config(
     api_url: str = Form(...),
-    api_token: str = Form(...),
+    api_token: str = Form(""),  # 允許空白，用於本地模型
     model_name: str = Form("gpt-3.5-turbo")
 ):
     """保存API配置"""
@@ -423,7 +423,7 @@ async def save_api_config(
 @app.post("/test_api_config")
 async def test_api_config(
     api_url: str = Form(...),
-    api_token: str = Form(...),
+    api_token: str = Form(""),  # 允許空白，用於本地模型
     model_name: str = Form("gpt-3.5-turbo")
 ):
     """測試API配置"""

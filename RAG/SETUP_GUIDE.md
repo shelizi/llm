@@ -73,11 +73,18 @@ API 網址: https://your-resource.openai.azure.com
 API Token: your-azure-api-key
 ```
 
-#### 本地 Ollama
+#### 本地 Ollama（推薦）
 ```
 API 網址: http://localhost:11434
 模型名稱: llama2
-API Token: (可以留空或填入任意值)
+API Token: (留空 - 本地模型不需要)
+```
+
+#### 本地 LocalAI
+```
+API 網址: http://localhost:8080
+模型名稱: gpt-3.5-turbo
+API Token: (留空 - 本地模型不需要)
 ```
 
 ### 3. 測試和保存
@@ -185,11 +192,22 @@ rm -rf RAG/config/
 
 ## 支援的 API 服務
 
-- ✅ OpenAI GPT-3.5/GPT-4
-- ✅ Azure OpenAI
-- ✅ Anthropic Claude (通過相容層)
-- ✅ 本地 Ollama
-- ✅ 其他 OpenAI 相容 API
+### 🏠 本地模型（推薦）
+- ✅ **Ollama** - 最簡單的本地模型方案
+- ✅ **LocalAI** - 功能豐富的本地 AI 服務
+- ✅ **Text Generation WebUI** - 支援多種開源模型
+- ✅ **vLLM** - 高性能推理服務器
+
+### ☁️ 雲端服務
+- ✅ **OpenAI** GPT-3.5/GPT-4
+- ✅ **Azure OpenAI** - 企業級 OpenAI 服務
+- ✅ **其他 OpenAI 相容 API**
+
+### 🔒 隱私優勢
+本地模型的最大優勢是**完全隱私**：
+- 所有數據在本地處理，不上傳到雲端
+- 無需 API Token，避免金鑰洩露風險
+- 完全離線運行，適合敏感文檔處理
 
 ## 聯繫和支援
 

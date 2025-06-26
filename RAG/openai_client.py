@@ -28,6 +28,55 @@ class OpenAICompatibleClient:
         if self.session and not self.session.closed:
             await self.session.close()
     
+    def _build_headers(self, api_token: str) -> Dict[str, str]:
+        """構建請求標頭，支援本地模型（可選 token）"""
+        headers = {"Content-Type": "application/json"}
+        
+        # 如果有 token 且不為空，添加 Authorization 標頭
+        # 本地模型（如 Ollama）通常不需要 token
+        if api_token and api_token.strip():
+            headers["Authorization"] = f"Bearer {api_token.strip()}"
+        
+        return headers
+    
+    def _detect_api_type(self, api_url: str) -> str:
+        """檢測 API 類型以決定端點路徑"""
+        url_lower = api_url.lower()
+        
+        if "ollama" in url_lower or ":11434" in url_lower:
+            return "ollama"
+        elif "localai" in url_lower or ":8080" in url_lower:
+            return "localai"
+        elif "azure" in url_lower:
+            return "azure"
+        elif "api.openai.com" in url_lower:
+            return "openai"
+        else:
+            return "generic"
+    
+    def _build_api_url(self, base_url: str, api_type: str = None) -> str:
+        """根據 API 類型構建完整的 API URL"""
+        base_url = base_url.rstrip("/")
+        
+        if api_type is None:
+            api_type = self._detect_api_type(base_url)
+        
+        # 如果已經包含完整路徑，直接返回
+        if "/chat/completions" in base_url:
+            return base_url
+        
+        # 根據不同的 API 類型添加適當的路徑
+        if api_type == "ollama":
+            return f"{base_url}/v1/chat/completions"
+        elif api_type == "localai":
+            return f"{base_url}/v1/chat/completions"
+        elif api_type == "azure":
+            # Azure OpenAI 有特殊的 URL 格式
+            return f"{base_url}/openai/deployments/{{model}}/chat/completions?api-version=2023-12-01-preview"
+        else:
+            # 默認 OpenAI 格式
+            return f"{base_url}/v1/chat/completions"
+    
     def _build_messages(self, query: str, context: str) -> List[Dict[str, str]]:
         """構建對話消息"""
         system_prompt = """你是一個專業的AI助手，專門根據提供的文檔內容回答問題。
@@ -80,16 +129,11 @@ class OpenAICompatibleClient:
                 "stream": False
             }
             
-            # 構建請求標頭
-            headers = {
-                "Content-Type": "application/json",
-                "Authorization": f"Bearer {config['api_token']}"
-            }
+            # 構建請求標頭（支援本地模型）
+            headers = self._build_headers(config.get('api_token', ''))
             
             # 發送請求
-            api_url = config["api_url"].rstrip("/")
-            if not api_url.endswith("/chat/completions"):
-                api_url += "/v1/chat/completions"
+            api_url = self._build_api_url(config["api_url"])
             
             logging.info(f"發送請求到: {api_url}")
             
@@ -155,15 +199,11 @@ class OpenAICompatibleClient:
                 "temperature": 0
             }
             
-            headers = {
-                "Content-Type": "application/json",
-                "Authorization": f"Bearer {api_token}"
-            }
+            # 構建請求標頭（支援本地模型）
+            headers = self._build_headers(api_token)
             
             # 處理URL
-            test_url = api_url.rstrip("/")
-            if not test_url.endswith("/chat/completions"):
-                test_url += "/v1/chat/completions"
+            test_url = self._build_api_url(api_url)
             
             async with session.post(test_url, json=request_data, headers=headers) as response:
                 if response.status == 200:
