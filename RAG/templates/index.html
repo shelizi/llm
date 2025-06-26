@@ -129,6 +129,44 @@
       margin-bottom: 20px;
       color: #2e7d32;
     }
+    
+    /* 查詢設定樣式 */
+    .query-settings {
+      background: #f8f9fa;
+      border-radius: 8px;
+      padding: 15px;
+      margin-top: 15px;
+    }
+    
+    .top-k-control {
+      background: white;
+      border-radius: 6px;
+      padding: 10px;
+      border: 1px solid #e9ecef;
+    }
+    
+    .top-k-control .input-group {
+      width: auto;
+    }
+    
+    .top-k-control .form-control {
+      border-left: 0;
+      border-right: 0;
+      font-weight: 600;
+    }
+    
+    .top-k-control .btn {
+      border-color: #ced4da;
+    }
+    
+    .top-k-control .btn:hover {
+      background-color: #e9ecef;
+    }
+    
+    .top-k-control .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
   </style>
 </head>
 <body>
@@ -259,7 +297,7 @@
             <h5 class="card-title mb-0">🔍 智能查詢</h5>
           </div>
           <div class="card-body">
-            <div class="row">
+            <div class="row mb-3">
               <div class="col-md-8">
                 <div class="input-group">
                   <input type="text" id="query_input" class="form-control form-control-lg" placeholder="輸入您的問題或查詢內容...">
@@ -271,6 +309,50 @@
               <div class="col-md-4">
                 <div class="d-flex align-items-center h-100">
                   <small class="text-muted">基於已索引的文檔內容進行智能問答</small>
+                </div>
+              </div>
+            </div>
+            
+            <!-- 查詢設定選項 -->
+            <div class="row">
+              <div class="col-md-6">
+                <div class="card bg-light border-0">
+                  <div class="card-body py-2">
+                    <div class="row align-items-center">
+                      <div class="col-auto">
+                        <label for="top_k_input" class="form-label mb-0 fw-semibold">
+                          <i class="bi bi-sliders"></i> 返回結果數量:
+                        </label>
+                      </div>
+                      <div class="col-auto">
+                        <div class="input-group input-group-sm">
+                          <button class="btn btn-outline-secondary" type="button" id="decrease_btn">
+                            <i class="bi bi-dash"></i>
+                          </button>
+                          <input type="number" id="top_k_input" class="form-control text-center" 
+                                 value="5" min="1" max="20" style="width: 60px;">
+                          <button class="btn btn-outline-secondary" type="button" id="increase_btn">
+                            <i class="bi bi-plus"></i>
+                          </button>
+                        </div>
+                      </div>
+                      <div class="col-auto">
+                        <small class="text-muted">個相關文檔</small>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div class="col-md-6">
+                <div class="card bg-light border-0">
+                  <div class="card-body py-2">
+                    <div class="d-flex align-items-center">
+                      <i class="bi bi-info-circle text-info me-2"></i>
+                      <small class="text-muted">
+                        數量越多結果越全面，但處理時間可能較長
+                      </small>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -494,6 +576,48 @@
     // 初始化選擇計數
     updateSelectedCount();
 
+    // 查詢數量調整功能
+    function updateTopKDisplay() {
+      const topKInput = document.getElementById('top_k_input');
+      const currentValue = parseInt(topKInput.value);
+      
+      // 更新按鈕狀態
+      document.getElementById('decrease_btn').disabled = currentValue <= 1;
+      document.getElementById('increase_btn').disabled = currentValue >= 20;
+      
+      // 確保值在有效範圍內
+      if (currentValue < 1) topKInput.value = 1;
+      if (currentValue > 20) topKInput.value = 20;
+    }
+
+    // 增加數量按鈕
+    document.getElementById('increase_btn').addEventListener('click', () => {
+      const topKInput = document.getElementById('top_k_input');
+      const currentValue = parseInt(topKInput.value);
+      if (currentValue < 20) {
+        topKInput.value = currentValue + 1;
+        updateTopKDisplay();
+      }
+    });
+
+    // 減少數量按鈕
+    document.getElementById('decrease_btn').addEventListener('click', () => {
+      const topKInput = document.getElementById('top_k_input');
+      const currentValue = parseInt(topKInput.value);
+      if (currentValue > 1) {
+        topKInput.value = currentValue - 1;
+        updateTopKDisplay();
+      }
+    });
+
+    // 直接輸入數量時的驗證
+    document.getElementById('top_k_input').addEventListener('input', () => {
+      updateTopKDisplay();
+    });
+
+    // 初始化數量顯示
+    updateTopKDisplay();
+
     // 查詢按鈕事件處理
     document.getElementById('query_btn').addEventListener('click', async () => {
       const q = document.getElementById('query_input').value.trim();
@@ -520,10 +644,13 @@
       `;
       
       try {
+        // 獲取用戶設定的返回數量
+        const topK = parseInt(document.getElementById('top_k_input').value) || 5;
+        
         const resp = await fetch('/query', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ query: q, top_k: 5 })
+          body: JSON.stringify({ query: q, top_k: topK })
         });
         
         if (!resp.ok) {
@@ -545,7 +672,7 @@
         // 查詢統計信息
         html += `
           <div class="query-stats">
-            <strong>📊 查詢統計:</strong> 找到 ${data.sources.length} 個相關文檔片段
+            <strong>📊 查詢統計:</strong> 請求 ${topK} 個結果，實際找到 ${data.sources.length} 個相關文檔片段
             ${data.sources.length > 0 ? `，最高相似度: ${(data.sources[0].score * 100).toFixed(1)}%` : ''}
           </div>
         `;
