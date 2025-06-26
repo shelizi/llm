@@ -9,7 +9,7 @@ POST /query
 Body:
 {
   "query": "請問阿里山在哪裡？",
-  "top_k": 3          # 選填，預設 3
+  "top_k": 5          # 選填，預設 5，範圍 1-20
 }
 
 Response:
@@ -20,7 +20,7 @@ Response:
 
 from pathlib import Path
 from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 import logging
 from llama_index.core import Settings  # 新增
 
@@ -39,7 +39,7 @@ app = FastAPI(title="RAG API with LlamaIndex & Chroma")
 
 class QueryRequest(BaseModel):
     query: str
-    top_k: int = 3
+    top_k: int = Field(default=5, ge=1, le=20, description="返回的相似文檔數量，範圍1-20")
 
 class SourceItem(BaseModel):
     filename: str
@@ -205,3 +205,17 @@ def query_endpoint(req: QueryRequest):
         )
 
     return QueryResponse(answer=answer_text, sources=sources)
+
+@app.get("/health")
+def health_check():
+    """健康檢查端點，返回API狀態和配置信息"""
+    return {
+        "status": "healthy",
+        "index_loaded": index is not None,
+        "device": DEVICE,
+        "embed_model": EMBED_MODEL_NAME,
+        "chroma_dir": str(CHROMA_DIR),
+        "collection_name": COLLECTION_NAME,
+        "default_top_k": 5,
+        "max_top_k": 20
+    }
