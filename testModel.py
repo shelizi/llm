@@ -162,8 +162,15 @@ def chat_cli(model_name: str, max_context_tokens: int = 2048, default_system_pro
         scroll = 0              # Topmost line currently shown
         auto_scroll = True      # Whether we should keep view pinned to bottom
         total_lines = 0         # Total rendered lines in chat_pad (updated in redraw)
+
+        # Input editing state
         current_input = ""
-        last_redraw = 0  # Track last UI refresh time
+        cursor_pos = 0          # Caret position within current_input
+        view_offset = 0         # First char index shown in input window
+        cmd_history = []        # Past entered prompts/commands
+        hist_idx = 0            # Index into cmd_history (len = newest)
+
+        last_redraw = 0         # Track last UI refresh time
 
         def redraw():
             """Redraw chat history pad and flush in a single screen update."""
@@ -215,9 +222,18 @@ def chat_cli(model_name: str, max_context_tokens: int = 2048, default_system_pro
         while True:
             input_win.erase()
             input_win.border()
-            # Show only the tail part if input is wider than window
-            trimmed = current_input[-(max_x - 4):]
-            input_win.addstr(1, 2, trimmed)
+            visible_width = max_x - 4
+            # Ensure view_offset keeps cursor visible
+            if cursor_pos < view_offset:
+                view_offset = cursor_pos
+            elif cursor_pos - view_offset >= visible_width:
+                view_offset = cursor_pos - visible_width + 1
+            display = current_input[view_offset:view_offset + visible_width]
+            # Clear line area then draw
+            input_win.addstr(1, 2, " " * visible_width)
+            input_win.addstr(1, 2, display)
+            # Move cursor inside input window
+            input_win.move(1, 2 + cursor_pos - view_offset)
             input_win.noutrefresh()
             curses.doupdate()
 
@@ -269,6 +285,15 @@ def chat_cli(model_name: str, max_context_tokens: int = 2048, default_system_pro
                         redraw()
                         current_input = ""
                         continue
+                    elif prompt.lower().startswith("/clear"):
+                        # Clear chat history and context
+                        history.clear()
+                        conversation.clear()
+                        scroll = 0
+                        auto_scroll = True
+                        redraw()
+                        current_input = ""
+                        continue
                     # Prepare context
                     messages = _build_messages(conversation, prompt)
                     ctx_tokens = sum(_estimate_tokens(m["content"]) for m in messages)
@@ -307,9 +332,38 @@ def chat_cli(model_name: str, max_context_tokens: int = 2048, default_system_pro
                     redraw()
                 # After completing an answer, re-enable auto-scroll
                 auto_scroll = True
+                # Store prompt in history for ↑/↓ navigation
+                cmd_history.append(prompt)
+                hist_idx = len(cmd_history)
                 current_input = ""
+                cursor_pos = 0
+                view_offset = 0
             elif ch in (curses.KEY_BACKSPACE, 127, 8):
-                current_input = current_input[:-1]
+                if cursor_pos > 0:
+                    current_input = current_input[:cursor_pos-1] + current_input[cursor_pos:]
+                    cursor_pos -= 1
+            elif ch == curses.KEY_LEFT:
+                if cursor_pos > 0:
+                    cursor_pos -= 1
+            elif ch == curses.KEY_RIGHT:
+                if cursor_pos < len(current_input):
+                    cursor_pos += 1
+            elif ch == curses.KEY_UP:
+                if cmd_history and hist_idx > 0:
+                    hist_idx -= 1
+                    current_input = cmd_history[hist_idx]
+                    cursor_pos = len(current_input)
+                    view_offset = max(0, cursor_pos - (max_x - 4) + 1)
+            elif ch == curses.KEY_DOWN:
+                if cmd_history:
+                    if hist_idx < len(cmd_history) - 1:
+                        hist_idx += 1
+                        current_input = cmd_history[hist_idx]
+                    else:
+                        hist_idx = len(cmd_history)
+                        current_input = ""
+                    cursor_pos = len(current_input)
+                    view_offset = max(0, cursor_pos - (max_x - 4) + 1)
             elif ch == curses.KEY_PPAGE:
                 scroll = max(0, scroll - chat_height)
                 auto_scroll = False  # User is manually scrolling
@@ -322,7 +376,8 @@ def chat_cli(model_name: str, max_context_tokens: int = 2048, default_system_pro
             elif ch == 27:  # ESC
                 break
             elif 32 <= ch <= 126:
-                current_input += chr(ch)
+                current_input = current_input[:cursor_pos] + chr(ch) + current_input[cursor_pos:]
+                cursor_pos += 1
 
     curses.wrapper(_run)
 
