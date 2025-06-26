@@ -6,8 +6,8 @@ services:
     image: vllm/vllm-openai:latest
     container_name: vllm-mistral-24B
     ipc: host
-    environment:
-      - HUGGING_FACE_HUB_TOKEN=${HUGGING_FACE_HUB_TOKEN}
+    env_file:
+      - ../.env
     volumes:
       - ~/.cache/huggingface:/root/.cache/huggingface
       - ~/vllm/llm/models:/models

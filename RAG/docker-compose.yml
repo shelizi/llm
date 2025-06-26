@@ -17,6 +17,8 @@ services:
 
     # 啟用 GPU (需安裝 NVIDIA Container Toolkit)
     runtime: nvidia
+    env_file:
+      - ../.env
     environment:
       - NVIDIA_VISIBLE_DEVICES=all
 
