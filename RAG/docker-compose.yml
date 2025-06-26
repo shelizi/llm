@@ -1,0 +1,33 @@
+version: "3.9"
+
+# ----------------------------------------------------------------------------
+# docker-compose 設定：啟動 GPU 版 RAG 容器
+# ----------------------------------------------------------------------------
+# 使用方式：
+# 1. 於 RAG 目錄執行  docker compose up  --build
+# 2. 透過 -v 掛載外部模型目錄 (預設為 ./models)，可共用 Hugging Face/Torch 快取
+#    若已存在其他路徑，可自行修改左側路徑即可。
+# ----------------------------------------------------------------------------
+
+services:
+  rag:
+    container_name: rag-gpu
+    build: .          # 讀取同目錄 Dockerfile
+    image: rag-gpu:latest
+
+    # 啟用 GPU (需安裝 NVIDIA Container Toolkit)
+    runtime: nvidia
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+
+    ports:
+      - "8000:8000"
+    volumes:
+      # 共用模型快取資料夾
+      - ./models:/models
+      # ChromaDB 持久化資料夾 (選擇性)
+      - ./chroma_db:/app/chroma_db
+
+    command: ["uvicorn", "rag_api:app", "--host", "0.0.0.0", "--port", "8000"]
+
+    restart: unless-stopped

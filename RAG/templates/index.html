@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <title>RAG File Manager</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 2rem; }
+    table { border-collapse: collapse; width: 100%; margin-top: 1rem; }
+    th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
+    th { background: #f0f0f0; }
+  </style>
+</head>
+<body>
+  <h1>RAG 檔案管理與索引</h1>
+
+  <!-- 上傳檔案 -->
+  <h2>上傳檔案</h2>
+  <form action="/upload" method="post" enctype="multipart/form-data">
+    <input type="file" name="file" required accept=".txt,.pdf,.doc,.docx">
+    <button type="submit">上傳</button>
+  </form>
+
+  <!-- 建立索引 -->
+  <h2>建立索引</h2>
+  <form action="/index" method="post">
+    <label>選擇檔案：</label>
+    <select name="filename" required>
+      {% for f in files %}
+        <option value="{{ f }}">{{ f }}</option>
+      {% endfor %}
+    </select>
+    <label>Chunk Size:</label>
+    <input type="number" name="chunk_size" value="512" style="width: 80px;">
+    <label>Overlap:</label>
+    <input type="number" name="overlap" value="50" style="width: 80px;">
+    <button type="submit">開始索引</button>
+  </form>
+
+  <!-- 檔案狀態 -->
+  <h2>檔案狀態</h2>
+  <table>
+    <tr><th>檔案名稱</th><th>索引狀態</th></tr>
+    {% for f in files %}
+      <tr>
+        <td>{{ f }}</td>
+        <td>{{ statuses[f] }}</td>
+      </tr>
+    {% endfor %}
+  </table>
+
+  <!-- 查詢 -->
+  <h2>查詢</h2>
+  <input type="text" id="query_input" placeholder="輸入查詢內容" style="width: 60%;">
+  <button id="query_btn">查詢</button>
+  <pre id="query_result" style="white-space: pre-wrap; border:1px solid #ccc; padding:8px; margin-top:1rem; height:160px; overflow:auto;"></pre>
+
+  <p>本頁每 10 秒自動重新整理索引狀態。</p>
+
+  <script>
+    // 自動刷新頁面，以便更新檔案狀態 (10 秒)
+    setTimeout(() => location.reload(), 10000);
+
+    document.getElementById('query_btn').addEventListener('click', async () => {
+      const q = document.getElementById('query_input').value.trim();
+      if (!q) return;
+      const out = document.getElementById('query_result');
+      out.textContent = '查詢中...';
+      try {
+        const resp = await fetch('/query', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ query: q, top_k: 3 })
+        });
+        if (!resp.ok) {
+          const txt = await resp.text();
+          out.textContent = '錯誤: ' + txt;
+          return;
+        }
+        const data = await resp.json();
+        let txt = '回答:\n' + data.answer + '\n\n來源: \n';
+        data.sources.forEach(s => {
+          txt += `• ${s.filename} (score=${s.score})\n  ${s.snippet}\n`;
+        });
+        out.textContent = txt;
+      } catch (e) {
+        out.textContent = '錯誤: ' + e;
+      }
+    });
+  </script>
+</body>
+</html>
