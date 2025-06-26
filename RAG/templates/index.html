@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>RAG File Manager</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
   <style>
     body {
       padding-top: 2rem;
@@ -17,6 +18,117 @@
     .status-已上傳 { background-color: #6c757d; }
     .status-已索引 { background-color: #198754; }
     .status-錯誤 { background-color: #dc3545; }
+    
+    .file-checkbox {
+      transform: scale(1.2);
+      margin: 0;
+    }
+    
+    .table th:first-child,
+    .table td:first-child {
+      text-align: center;
+      vertical-align: middle;
+    }
+    
+    /* 查詢結果樣式 */
+    .query-answer {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 20px;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+    }
+    
+    .query-answer h6 {
+      color: #ffffff;
+      margin-bottom: 15px;
+      font-weight: 600;
+    }
+    
+    .query-answer-content {
+      font-size: 1.1em;
+      line-height: 1.6;
+      margin: 0;
+    }
+    
+    .sources-section {
+      background: #f8f9fa;
+      border-radius: 12px;
+      padding: 20px;
+    }
+    
+    .source-item {
+      background: white;
+      border-radius: 8px;
+      padding: 15px;
+      margin-bottom: 15px;
+      border-left: 4px solid #007bff;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+    
+    .source-item:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+    }
+    
+    .source-item:last-child {
+      margin-bottom: 0;
+    }
+    
+    .source-filename {
+      color: #007bff;
+      font-weight: 600;
+      font-size: 1.1em;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    
+    .source-score {
+      background: #e3f2fd;
+      color: #1976d2;
+      padding: 2px 8px;
+      border-radius: 12px;
+      font-size: 0.85em;
+      font-weight: 500;
+    }
+    
+    .source-snippet {
+      color: #555;
+      line-height: 1.5;
+      margin-top: 10px;
+      padding: 10px;
+      background: #f8f9fa;
+      border-radius: 6px;
+      border-left: 3px solid #007bff;
+    }
+    
+    .loading-spinner {
+      display: inline-block;
+      width: 20px;
+      height: 20px;
+      border: 3px solid #f3f3f3;
+      border-top: 3px solid #007bff;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+    
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    
+    .query-stats {
+      background: #e8f5e8;
+      border: 1px solid #c3e6c3;
+      border-radius: 8px;
+      padding: 12px;
+      margin-bottom: 20px;
+      color: #2e7d32;
+    }
   </style>
 </head>
 <body>
@@ -48,18 +160,10 @@
         <!-- Indexing Card -->
         <div class="card">
           <div class="card-header">
-            <h5 class="card-title mb-0">建立索引</h5>
+            <h5 class="card-title mb-0">索引參數設定</h5>
           </div>
           <div class="card-body">
-            <form action="/index" method="post">
-              <div class="mb-3">
-                <label for="fileList" class="form-label">選擇檔案（可多選）：</label>
-                <select name="filenames" id="fileList" class="form-select" multiple size="8" required>
-                  {% for f in files %}
-                    <option value="{{ f }}">{{ f }}</option>
-                  {% endfor %}
-                </select>
-              </div>
+            <form id="indexForm" action="/index" method="post">
               <div class="row">
                 <div class="col">
                   <label for="chunkSize" class="form-label">Chunk Size:</label>
@@ -70,7 +174,13 @@
                   <input type="number" name="overlap" id="overlap" value="50" class="form-control">
                 </div>
               </div>
-              <button type="submit" class="btn btn-success w-100 mt-3">開始索引</button>
+              <div class="mt-3">
+                <small class="text-muted">請在右側檔案狀態表格中選擇要建立索引的檔案，然後點擊下方按鈕開始索引。</small>
+              </div>
+              <div class="d-grid gap-2">
+                <button type="button" id="startIndexBtn" class="btn btn-success" disabled>開始索引選中的檔案</button>
+                <button type="button" id="resetSelectedBtn" class="btn btn-outline-warning btn-sm" disabled style="display: none;">重置選中檔案的錯誤狀態</button>
+              </div>
             </form>
           </div>
         </div>
@@ -81,16 +191,22 @@
         <!-- Status Card -->
         <div class="card mb-4">
           <div class="card-header d-flex justify-content-between align-items-center">
-            <h5 class="card-title mb-0">檔案狀態</h5>
-            <form action="/clear_all_status" method="post" style="display: inline;">
-              <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('確定要清除所有檔案狀態嗎？')">清除所有狀態</button>
-            </form>
+            <h5 class="card-title mb-0">檔案狀態與索引管理</h5>
+            <div>
+              <button type="button" id="selectAllBtn" class="btn btn-sm btn-outline-primary me-2">全選/取消</button>
+              <form action="/clear_all_status" method="post" style="display: inline;">
+                <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('確定要清除所有檔案狀態嗎？')">清除所有狀態</button>
+              </form>
+            </div>
           </div>
           <div class="card-body">
             <div class="table-responsive">
               <table class="table table-striped table-hover">
                 <thead>
                   <tr>
+                    <th width="50">
+                      <input type="checkbox" id="selectAllCheckbox" class="form-check-input">
+                    </th>
                     <th>檔案名稱</th>
                     <th>索引狀態</th>
                     <th>操作</th>
@@ -99,6 +215,9 @@
                 <tbody>
                   {% for f in files %}
                     <tr>
+                      <td>
+                        <input type="checkbox" name="file_select" value="{{ f }}" class="form-check-input file-checkbox">
+                      </td>
                       <td>{{ f }}</td>
                       <td class="status-cell" data-filename="{{ f }}">
                         <span class="badge status-badge status-{{ statuses[f].split(' ')[0] }}">{{ statuses[f] }}</span>
@@ -120,21 +239,56 @@
                 </tbody>
               </table>
             </div>
-            <small class="text-muted">本頁每 10 秒自動更新索引狀態。</small>
+            <div class="d-flex justify-content-between align-items-center mt-3">
+              <small class="text-muted">本頁每 10 秒自動更新索引狀態。勾選檔案後可在左側設定參數並開始索引。</small>
+              <div>
+                <span id="selectedCount" class="badge bg-info">已選擇 0 個檔案</span>
+              </div>
+            </div>
           </div>
         </div>
 
-        <!-- Query Card -->
+      </div>
+    </div>
+
+    <!-- Query Section - Full Width -->
+    <div class="row mt-5">
+      <div class="col-12">
         <div class="card">
           <div class="card-header">
-            <h5 class="card-title mb-0">查詢</h5>
+            <h5 class="card-title mb-0">🔍 智能查詢</h5>
           </div>
           <div class="card-body">
-            <div class="input-group mb-3">
-              <input type="text" id="query_input" class="form-control" placeholder="輸入查詢內容">
-              <button class="btn btn-outline-secondary" type="button" id="query_btn">查詢</button>
+            <div class="row">
+              <div class="col-md-8">
+                <div class="input-group">
+                  <input type="text" id="query_input" class="form-control form-control-lg" placeholder="輸入您的問題或查詢內容...">
+                  <button class="btn btn-primary btn-lg" type="button" id="query_btn">
+                    <i class="bi bi-search"></i> 查詢
+                  </button>
+                </div>
+              </div>
+              <div class="col-md-4">
+                <div class="d-flex align-items-center h-100">
+                  <small class="text-muted">基於已索引的文檔內容進行智能問答</small>
+                </div>
+              </div>
             </div>
-            <div id="query_result" class="bg-light p-3 rounded" style="min-height: 150px;"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Query Results Section - Full Width -->
+    <div class="row mt-4" id="query_results_section" style="display: none;">
+      <div class="col-12">
+        <div class="card">
+          <div class="card-header d-flex justify-content-between align-items-center">
+            <h5 class="card-title mb-0">📋 查詢結果</h5>
+            <button type="button" class="btn btn-sm btn-outline-secondary" id="clear_results_btn">清除結果</button>
+          </div>
+          <div class="card-body">
+            <div id="query_result"></div>
           </div>
         </div>
       </div>
@@ -157,6 +311,8 @@
             td.innerHTML = `<span class="badge status-badge status-${statusClass}">${status}</span>`;
           }
         });
+        // 狀態更新後重新計算選擇計數，確保UI一致性
+        updateSelectedCount();
       } catch (e) {
         console.error('Status update failed', e);
       }
@@ -165,32 +321,311 @@
     updateStatusTable();
     setInterval(updateStatusTable, 10000);
 
+    // 檔案選擇功能
+    function updateSelectedCount() {
+      const checkboxes = document.querySelectorAll('.file-checkbox:checked');
+      const count = checkboxes.length;
+      document.getElementById('selectedCount').textContent = `已選擇 ${count} 個檔案`;
+      
+      // 控制開始索引按鈕的啟用狀態
+      const startBtn = document.getElementById('startIndexBtn');
+      startBtn.disabled = count === 0;
+      
+      if (count > 0) {
+        startBtn.textContent = `開始索引選中的 ${count} 個檔案`;
+      } else {
+        startBtn.textContent = '開始索引選中的檔案';
+      }
+      
+      // 檢查是否有錯誤狀態的檔案被選中
+      const resetBtn = document.getElementById('resetSelectedBtn');
+      let hasErrorFiles = false;
+      
+      checkboxes.forEach(cb => {
+        const filename = cb.value;
+        const statusCell = document.querySelector(`[data-filename="${filename}"]`);
+        if (statusCell) {
+          const statusText = statusCell.textContent.trim();
+          if (statusText.startsWith('錯誤')) {
+            hasErrorFiles = true;
+          }
+        }
+      });
+      
+      if (hasErrorFiles && count > 0) {
+        resetBtn.style.display = 'block';
+        resetBtn.disabled = false;
+      } else {
+        resetBtn.style.display = 'none';
+        resetBtn.disabled = true;
+      }
+    }
+
+    // 全選/取消全選功能
+    document.getElementById('selectAllCheckbox').addEventListener('change', function() {
+      const checkboxes = document.querySelectorAll('.file-checkbox');
+      checkboxes.forEach(cb => cb.checked = this.checked);
+      updateSelectedCount();
+    });
+
+    // 全選按鈕功能
+    document.getElementById('selectAllBtn').addEventListener('click', function() {
+      const selectAllCheckbox = document.getElementById('selectAllCheckbox');
+      selectAllCheckbox.checked = !selectAllCheckbox.checked;
+      selectAllCheckbox.dispatchEvent(new Event('change'));
+    });
+
+    // 個別檔案選擇
+    document.addEventListener('change', function(e) {
+      if (e.target.classList.contains('file-checkbox')) {
+        updateSelectedCount();
+        
+        // 檢查是否所有檔案都被選中，更新全選checkbox狀態
+        const allCheckboxes = document.querySelectorAll('.file-checkbox');
+        const checkedCheckboxes = document.querySelectorAll('.file-checkbox:checked');
+        const selectAllCheckbox = document.getElementById('selectAllCheckbox');
+        
+        if (allCheckboxes.length === checkedCheckboxes.length) {
+          selectAllCheckbox.checked = true;
+          selectAllCheckbox.indeterminate = false;
+        } else if (checkedCheckboxes.length === 0) {
+          selectAllCheckbox.checked = false;
+          selectAllCheckbox.indeterminate = false;
+        } else {
+          selectAllCheckbox.checked = false;
+          selectAllCheckbox.indeterminate = true;
+        }
+      }
+    });
+
+    // 開始索引按鈕功能
+    document.getElementById('startIndexBtn').addEventListener('click', function() {
+      const checkedBoxes = document.querySelectorAll('.file-checkbox:checked');
+      if (checkedBoxes.length === 0) {
+        alert('請先選擇要建立索引的檔案');
+        return;
+      }
+
+      // 創建表單數據
+      const form = document.getElementById('indexForm');
+      const formData = new FormData();
+      
+      // 添加選中的檔案名稱
+      checkedBoxes.forEach(cb => {
+        formData.append('filenames', cb.value);
+      });
+      
+      // 添加參數
+      formData.append('chunk_size', document.getElementById('chunkSize').value);
+      formData.append('overlap', document.getElementById('overlap').value);
+      
+      // 提交表單
+      fetch('/index', {
+        method: 'POST',
+        body: formData
+      }).then(response => {
+        if (response.ok) {
+          // 清除選擇狀態
+          checkedBoxes.forEach(cb => cb.checked = false);
+          document.getElementById('selectAllCheckbox').checked = false;
+          updateSelectedCount();
+          
+          // 顯示成功消息
+          alert(`已開始為 ${checkedBoxes.length} 個檔案建立索引，請查看狀態更新`);
+          
+          // 重新載入頁面以更新狀態
+          window.location.reload();
+        } else {
+          alert('索引建立失敗，請檢查服務器狀態');
+        }
+      }).catch(error => {
+        console.error('Error:', error);
+        alert('索引建立過程中發生錯誤');
+      });
+    });
+
+    // 重置選中檔案的錯誤狀態
+    document.getElementById('resetSelectedBtn').addEventListener('click', function() {
+      const checkedBoxes = document.querySelectorAll('.file-checkbox:checked');
+      const errorFiles = [];
+      
+      checkedBoxes.forEach(cb => {
+        const filename = cb.value;
+        const statusCell = document.querySelector(`[data-filename="${filename}"]`);
+        if (statusCell) {
+          const statusText = statusCell.textContent.trim();
+          if (statusText.startsWith('錯誤')) {
+            errorFiles.push(filename);
+          }
+        }
+      });
+      
+      if (errorFiles.length === 0) {
+        alert('沒有選中的檔案處於錯誤狀態');
+        return;
+      }
+      
+      if (!confirm(`確定要重置 ${errorFiles.length} 個檔案的錯誤狀態嗎？\n檔案: ${errorFiles.join(', ')}`)) {
+        return;
+      }
+      
+      // 批量重置狀態
+      let resetCount = 0;
+      errorFiles.forEach(filename => {
+        const formData = new FormData();
+        formData.append('filename', filename);
+        
+        fetch('/reset_status', {
+          method: 'POST',
+          body: formData
+        }).then(response => {
+          resetCount++;
+          if (resetCount === errorFiles.length) {
+            alert(`已重置 ${errorFiles.length} 個檔案的狀態`);
+            // 更新狀態顯示
+            updateStatusTable();
+          }
+        }).catch(error => {
+          console.error('Reset status error:', error);
+        });
+      });
+    });
+
+    // 初始化選擇計數
+    updateSelectedCount();
+
+    // 查詢按鈕事件處理
     document.getElementById('query_btn').addEventListener('click', async () => {
       const q = document.getElementById('query_input').value.trim();
-      if (!q) return;
+      if (!q) {
+        alert('請輸入查詢內容');
+        return;
+      }
+      
       const out = document.getElementById('query_result');
-      out.textContent = '查詢中...';
+      const resultsSection = document.getElementById('query_results_section');
+      const queryBtn = document.getElementById('query_btn');
+      
+      // 顯示載入狀態
+      queryBtn.disabled = true;
+      queryBtn.innerHTML = '<span class="loading-spinner"></span> 查詢中...';
+      
+      // 顯示結果區域
+      resultsSection.style.display = 'block';
+      out.innerHTML = `
+        <div class="text-center py-4">
+          <div class="loading-spinner" style="width: 40px; height: 40px;"></div>
+          <p class="mt-3 text-muted">正在分析您的問題並搜尋相關內容...</p>
+        </div>
+      `;
+      
       try {
         const resp = await fetch('/query', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ query: q, top_k: 5 })
         });
+        
         if (!resp.ok) {
           const txt = await resp.text();
-          out.textContent = '錯誤: ' + txt;
+          out.innerHTML = `
+            <div class="alert alert-danger" role="alert">
+              <h6><i class="bi bi-exclamation-triangle"></i> 查詢失敗</h6>
+              <p class="mb-0">錯誤信息: ${txt}</p>
+            </div>
+          `;
           return;
         }
+        
         const data = await resp.json();
-        let html = `<p><strong>回答:</strong> ${data.answer}</p>`;
-    html += `<p><strong>來源:</strong></p><ul>`;
-        data.sources.forEach(s => {
-      html += `<li><strong>${s.filename}</strong> (score=${s.score.toFixed(4)})<br><small>${s.snippet}</small></li>`;
-    });
-    html += '</ul>';
+        
+        // 構建美觀的結果顯示
+        let html = '';
+        
+        // 查詢統計信息
+        html += `
+          <div class="query-stats">
+            <strong>📊 查詢統計:</strong> 找到 ${data.sources.length} 個相關文檔片段
+            ${data.sources.length > 0 ? `，最高相似度: ${(data.sources[0].score * 100).toFixed(1)}%` : ''}
+          </div>
+        `;
+        
+        // 回答部分
+        html += `
+          <div class="query-answer">
+            <h6><i class="bi bi-lightbulb"></i> 智能回答</h6>
+            <div class="query-answer-content">${data.answer}</div>
+          </div>
+        `;
+        
+        // 來源部分
+        if (data.sources && data.sources.length > 0) {
+          html += `
+            <div class="sources-section">
+              <h6 class="mb-3"><i class="bi bi-file-text"></i> 參考來源 (${data.sources.length})</h6>
+          `;
+          
+          data.sources.forEach((source, index) => {
+            const scorePercent = (source.score * 100).toFixed(1);
+            const scoreColor = source.score > 0.8 ? '#4caf50' : source.score > 0.6 ? '#ff9800' : '#f44336';
+            
+            html += `
+              <div class="source-item">
+                <div class="source-filename">
+                  <i class="bi bi-file-earmark-text"></i>
+                  ${source.filename}
+                  <span class="source-score" style="background-color: ${scoreColor}20; color: ${scoreColor}">
+                    相似度: ${scorePercent}%
+                  </span>
+                </div>
+                <div class="source-snippet">
+                  <i class="bi bi-quote"></i>
+                  ${source.snippet}
+                </div>
+              </div>
+            `;
+          });
+          
+          html += '</div>';
+        } else {
+          html += `
+            <div class="alert alert-warning" role="alert">
+              <h6><i class="bi bi-info-circle"></i> 提示</h6>
+              <p class="mb-0">沒有找到相關的文檔內容，請嘗試使用不同的關鍵詞或確保已有文檔被正確索引。</p>
+            </div>
+          `;
+        }
+        
         out.innerHTML = html;
+        
       } catch (e) {
-        out.textContent = '錯誤: ' + e;
+        out.innerHTML = `
+          <div class="alert alert-danger" role="alert">
+            <h6><i class="bi bi-exclamation-triangle"></i> 連接錯誤</h6>
+            <p class="mb-0">無法連接到服務器: ${e.message}</p>
+          </div>
+        `;
+      } finally {
+        // 恢復按鈕狀態
+        queryBtn.disabled = false;
+        queryBtn.innerHTML = '<i class="bi bi-search"></i> 查詢';
+      }
+    });
+    
+    // 清除結果按鈕事件處理
+    document.getElementById('clear_results_btn').addEventListener('click', () => {
+      const resultsSection = document.getElementById('query_results_section');
+      const queryInput = document.getElementById('query_input');
+      
+      resultsSection.style.display = 'none';
+      queryInput.value = '';
+      queryInput.focus();
+    });
+    
+    // 支持回車鍵查詢
+    document.getElementById('query_input').addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') {
+        document.getElementById('query_btn').click();
       }
     });
   </script>
