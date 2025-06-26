@@ -37,6 +37,7 @@ Settings.llm = None
 import torch
 import chromadb
 import os
+import asyncio
 
 from llama_index.vector_stores.chroma import ChromaVectorStore
 from llama_index.embeddings.huggingface import HuggingFaceEmbedding
@@ -58,6 +59,8 @@ class SourceItem(BaseModel):
 class QueryResponse(BaseModel):
     answer: str
     sources: list[SourceItem] = []
+    enhanced_answer: str = ""  # AI增強回答
+    answer_source: str = "retrieval"  # "retrieval" 或 "ai_enhanced"
 
 # 環境變數 / 預設值
 CHROMA_DIR = Path(__file__).parent / "chroma_db"
@@ -181,7 +184,7 @@ def _startup():
 
 # ----------------- API 端點 -----------------
 @app.post("/query", response_model=QueryResponse)
-def query_endpoint(req: QueryRequest):
+async def query_endpoint(req: QueryRequest):
     global index
     if index is None:
         # 嘗試即時載入索引，以避免使用者已建好索引但尚未重啟服務
@@ -221,6 +224,7 @@ def query_endpoint(req: QueryRequest):
     answer_text = nodes[0].node.text.strip()
 
     sources: list[SourceItem] = []
+    context_text = ""
     for n in nodes:
         sources.append(
             SourceItem(
@@ -229,8 +233,32 @@ def query_endpoint(req: QueryRequest):
                 score=round(float(n.score or 0), 4),
             )
         )
+        # 收集上下文用於AI增強回答
+        context_text += f"\n文檔：{n.metadata.get('filename', '未知')}\n內容：{n.node.text}\n"
 
-    return QueryResponse(answer=answer_text, sources=sources)
+    # 嘗試使用AI增強回答
+    enhanced_answer = ""
+    answer_source = "retrieval"
+    
+    try:
+        from openai_client import openai_client
+        ai_result = await openai_client.generate_answer(req.query, context_text)
+        
+        if ai_result["success"]:
+            enhanced_answer = ai_result["answer"]
+            answer_source = "ai_enhanced"
+            logging.info("✅ AI增強回答生成成功")
+        else:
+            logging.warning(f"AI增強回答失敗: {ai_result.get('error', '未知錯誤')}")
+    except Exception as e:
+        logging.warning(f"AI增強回答異常: {e}")
+
+    return QueryResponse(
+        answer=answer_text, 
+        sources=sources,
+        enhanced_answer=enhanced_answer,
+        answer_source=answer_source
+    )
 
 @app.get("/indexed_files")
 def get_indexed_files():
@@ -273,6 +301,13 @@ def get_indexed_files():
 @app.get("/health")
 def health_check():
     """健康檢查端點，返回API狀態和配置信息"""
+    try:
+        from config_manager import ConfigManager
+        config_manager = ConfigManager()
+        api_status = config_manager.get_api_status()
+    except Exception:
+        api_status = {"configured": False}
+        
     return {
         "status": "healthy",
         "index_loaded": index is not None,
@@ -281,5 +316,6 @@ def health_check():
         "chroma_dir": str(CHROMA_DIR),
         "collection_name": COLLECTION_NAME,
         "default_top_k": 5,
-        "max_top_k": 20
+        "max_top_k": 20,
+        "api_configured": api_status.get("configured", False)
     }

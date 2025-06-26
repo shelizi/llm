@@ -316,6 +316,88 @@
       </div>
     </div>
 
+    <!-- API Configuration Section - Full Width -->
+    <div class="row mt-4">
+      <div class="col-12">
+        <div class="card">
+          <div class="card-header d-flex justify-content-between align-items-center">
+            <h5 class="card-title mb-0">⚙️ AI API 設定</h5>
+            <div>
+              <span id="api_status_badge" class="badge bg-secondary">未配置</span>
+              <button type="button" class="btn btn-sm btn-outline-primary ms-2" data-bs-toggle="collapse" data-bs-target="#api_config_section">
+                <i class="bi bi-gear"></i> 設定
+              </button>
+            </div>
+          </div>
+          <div class="collapse" id="api_config_section">
+            <div class="card-body">
+              <div class="row">
+                <div class="col-md-8">
+                  <form id="api_config_form">
+                    <div class="row mb-3">
+                      <div class="col-md-6">
+                        <label for="api_url" class="form-label">API 網址</label>
+                        <input type="url" class="form-control" id="api_url" placeholder="https://api.openai.com" required>
+                        <div class="form-text">支援 OpenAI 相容的 API 服務</div>
+                      </div>
+                      <div class="col-md-6">
+                        <label for="model_name" class="form-label">模型名稱</label>
+                        <input type="text" class="form-control" id="model_name" value="gpt-3.5-turbo" required>
+                        <div class="form-text">如：gpt-3.5-turbo, gpt-4, claude-3-sonnet 等</div>
+                      </div>
+                    </div>
+                    <div class="mb-3">
+                      <label for="api_token" class="form-label">API Token</label>
+                      <div class="input-group">
+                        <input type="password" class="form-control" id="api_token" placeholder="sk-..." required>
+                        <button class="btn btn-outline-secondary" type="button" id="toggle_token_visibility">
+                          <i class="bi bi-eye"></i>
+                        </button>
+                      </div>
+                      <div class="form-text">您的 API 金鑰將被加密存儲</div>
+                    </div>
+                    <div class="d-flex gap-2">
+                      <button type="button" class="btn btn-outline-primary" id="test_api_btn">
+                        <i class="bi bi-plug"></i> 測試連接
+                      </button>
+                      <button type="submit" class="btn btn-success">
+                        <i class="bi bi-check"></i> 保存配置
+                      </button>
+                      <button type="button" class="btn btn-outline-danger" id="delete_api_config_btn" style="display: none;">
+                        <i class="bi bi-trash"></i> 刪除配置
+                      </button>
+                    </div>
+                  </form>
+                </div>
+                <div class="col-md-4">
+                  <div class="card bg-light border-0 h-100">
+                    <div class="card-body">
+                      <h6 class="card-title">
+                        <i class="bi bi-info-circle text-info"></i> 配置說明
+                      </h6>
+                      <ul class="list-unstyled small">
+                        <li><i class="bi bi-check text-success"></i> 支援 OpenAI API</li>
+                        <li><i class="bi bi-check text-success"></i> 支援 Azure OpenAI</li>
+                        <li><i class="bi bi-check text-success"></i> 支援 Claude API</li>
+                        <li><i class="bi bi-check text-success"></i> 支援本地部署的相容 API</li>
+                      </ul>
+                      <div class="mt-3">
+                        <strong>安全性：</strong>
+                        <p class="small text-muted mb-0">
+                          API Token 將使用 AES 加密算法安全存儲在服務器本地，確保您的金鑰安全。
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div id="api_test_result" class="mt-3" style="display: none;"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- Query Section - Full Width -->
     <div class="row mt-5">
       <div class="col-12">
@@ -822,6 +904,236 @@
     // 初始載入文件列表
     loadIndexedFiles();
 
+    // ==================== API 配置相關功能 ====================
+    
+    // 載入API配置狀態
+    async function loadApiConfigStatus() {
+      try {
+        const response = await fetch('/api_config_status');
+        const status = await response.json();
+        
+        // 更新狀態徽章
+        const badge = document.getElementById('api_status_badge');
+        const deleteBtn = document.getElementById('delete_api_config_btn');
+        
+        if (status.configured) {
+          badge.className = 'badge bg-success';
+          badge.textContent = '已配置';
+          deleteBtn.style.display = 'inline-block';
+          
+          // 如果已配置，載入配置信息（不包含敏感信息）
+          document.getElementById('api_url').value = status.api_url || '';
+          document.getElementById('model_name').value = status.model_name || 'gpt-3.5-turbo';
+          // 不載入 token，保持安全
+        } else {
+          badge.className = 'badge bg-secondary';
+          badge.textContent = '未配置';
+          deleteBtn.style.display = 'none';
+        }
+      } catch (error) {
+        console.error('載入API配置狀態失敗:', error);
+      }
+    }
+    
+    // Token 可見性切換
+    document.getElementById('toggle_token_visibility').addEventListener('click', function() {
+      const tokenInput = document.getElementById('api_token');
+      const icon = this.querySelector('i');
+      
+      if (tokenInput.type === 'password') {
+        tokenInput.type = 'text';
+        icon.className = 'bi bi-eye-slash';
+      } else {
+        tokenInput.type = 'password';
+        icon.className = 'bi bi-eye';
+      }
+    });
+    
+    // 測試API連接
+    document.getElementById('test_api_btn').addEventListener('click', async function() {
+      const apiUrl = document.getElementById('api_url').value.trim();
+      const apiToken = document.getElementById('api_token').value.trim();
+      const modelName = document.getElementById('model_name').value.trim();
+      
+      if (!apiUrl || !apiToken || !modelName) {
+        alert('請填寫完整的API配置信息');
+        return;
+      }
+      
+      const btn = this;
+      const originalText = btn.innerHTML;
+      btn.disabled = true;
+      btn.innerHTML = '<span class="loading-spinner"></span> 測試中...';
+      
+      try {
+        const formData = new FormData();
+        formData.append('api_url', apiUrl);
+        formData.append('api_token', apiToken);
+        formData.append('model_name', modelName);
+        
+        const response = await fetch('/test_api_config', {
+          method: 'POST',
+          body: formData
+        });
+        
+        const result = await response.json();
+        const resultDiv = document.getElementById('api_test_result');
+        
+        if (result.success) {
+          resultDiv.innerHTML = `
+            <div class="alert alert-success" role="alert">
+              <h6><i class="bi bi-check-circle"></i> 連接測試成功</h6>
+              <p class="mb-0">${result.message}</p>
+              ${result.model ? `<small class="text-muted">檢測到模型: ${result.model}</small>` : ''}
+            </div>
+          `;
+        } else {
+          resultDiv.innerHTML = `
+            <div class="alert alert-danger" role="alert">
+              <h6><i class="bi bi-exclamation-triangle"></i> 連接測試失敗</h6>
+              <p class="mb-0">${result.message}</p>
+            </div>
+          `;
+        }
+        
+        resultDiv.style.display = 'block';
+        
+      } catch (error) {
+        const resultDiv = document.getElementById('api_test_result');
+        resultDiv.innerHTML = `
+          <div class="alert alert-danger" role="alert">
+            <h6><i class="bi bi-exclamation-triangle"></i> 測試失敗</h6>
+            <p class="mb-0">網絡錯誤: ${error.message}</p>
+          </div>
+        `;
+        resultDiv.style.display = 'block';
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = originalText;
+      }
+    });
+    
+    // 保存API配置
+    document.getElementById('api_config_form').addEventListener('submit', async function(e) {
+      e.preventDefault();
+      
+      const apiUrl = document.getElementById('api_url').value.trim();
+      const apiToken = document.getElementById('api_token').value.trim();
+      const modelName = document.getElementById('model_name').value.trim();
+      
+      if (!apiUrl || !apiToken || !modelName) {
+        alert('請填寫完整的API配置信息');
+        return;
+      }
+      
+      const submitBtn = this.querySelector('button[type="submit"]');
+      const originalText = submitBtn.innerHTML;
+      submitBtn.disabled = true;
+      submitBtn.innerHTML = '<span class="loading-spinner"></span> 保存中...';
+      
+      try {
+        const formData = new FormData();
+        formData.append('api_url', apiUrl);
+        formData.append('api_token', apiToken);
+        formData.append('model_name', modelName);
+        
+        const response = await fetch('/save_api_config', {
+          method: 'POST',
+          body: formData
+        });
+        
+        const result = await response.json();
+        const resultDiv = document.getElementById('api_test_result');
+        
+        if (result.success) {
+          resultDiv.innerHTML = `
+            <div class="alert alert-success" role="alert">
+              <h6><i class="bi bi-check-circle"></i> 配置保存成功</h6>
+              <p class="mb-0">${result.message}</p>
+            </div>
+          `;
+          
+          // 更新狀態
+          loadApiConfigStatus();
+          
+          // 清空敏感信息
+          document.getElementById('api_token').value = '';
+          
+        } else {
+          resultDiv.innerHTML = `
+            <div class="alert alert-danger" role="alert">
+              <h6><i class="bi bi-exclamation-triangle"></i> 保存失敗</h6>
+              <p class="mb-0">${result.message}</p>
+            </div>
+          `;
+        }
+        
+        resultDiv.style.display = 'block';
+        
+      } catch (error) {
+        const resultDiv = document.getElementById('api_test_result');
+        resultDiv.innerHTML = `
+          <div class="alert alert-danger" role="alert">
+            <h6><i class="bi bi-exclamation-triangle"></i> 保存失敗</h6>
+            <p class="mb-0">網絡錯誤: ${error.message}</p>
+          </div>
+        `;
+        resultDiv.style.display = 'block';
+      } finally {
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = originalText;
+      }
+    });
+    
+    // 刪除API配置
+    document.getElementById('delete_api_config_btn').addEventListener('click', async function() {
+      if (!confirm('確定要刪除API配置嗎？這將停用AI增強回答功能。')) {
+        return;
+      }
+      
+      try {
+        const response = await fetch('/delete_api_config', {
+          method: 'POST'
+        });
+        
+        const result = await response.json();
+        const resultDiv = document.getElementById('api_test_result');
+        
+        if (result.success) {
+          resultDiv.innerHTML = `
+            <div class="alert alert-success" role="alert">
+              <h6><i class="bi bi-check-circle"></i> 配置已刪除</h6>
+              <p class="mb-0">${result.message}</p>
+            </div>
+          `;
+          
+          // 清空表單
+          document.getElementById('api_config_form').reset();
+          document.getElementById('model_name').value = 'gpt-3.5-turbo';
+          
+          // 更新狀態
+          loadApiConfigStatus();
+          
+        } else {
+          resultDiv.innerHTML = `
+            <div class="alert alert-danger" role="alert">
+              <h6><i class="bi bi-exclamation-triangle"></i> 刪除失敗</h6>
+              <p class="mb-0">${result.message}</p>
+            </div>
+          `;
+        }
+        
+        resultDiv.style.display = 'block';
+        
+      } catch (error) {
+        console.error('刪除API配置失敗:', error);
+        alert('刪除失敗: ' + error.message);
+      }
+    });
+    
+    // 初始載入API配置狀態
+    loadApiConfigStatus();
+
     // 查詢按鈕事件處理
     document.getElementById('query_btn').addEventListener('click', async () => {
       const q = document.getElementById('query_input').value.trim();
@@ -893,12 +1205,41 @@
         `;
         
         // 回答部分
-        html += `
-          <div class="query-answer">
-            <h6><i class="bi bi-lightbulb"></i> 智能回答</h6>
-            <div class="query-answer-content">${data.answer}</div>
-          </div>
-        `;
+        if (data.enhanced_answer && data.answer_source === "ai_enhanced") {
+          // 顯示AI增強回答
+          html += `
+            <div class="query-answer">
+              <h6><i class="bi bi-robot"></i> AI 智能回答</h6>
+              <div class="query-answer-content">${data.enhanced_answer}</div>
+            </div>
+          `;
+          
+          // 如果有原始檢索回答，作為備選顯示
+          if (data.answer && data.answer !== data.enhanced_answer) {
+            html += `
+              <div class="alert alert-info mt-3">
+                <h6 class="alert-heading"><i class="bi bi-search"></i> 原始檢索結果</h6>
+                <p class="mb-0">${data.answer}</p>
+              </div>
+            `;
+          }
+        } else {
+          // 顯示原始檢索回答
+          html += `
+            <div class="query-answer">
+              <h6><i class="bi bi-search"></i> 檢索回答</h6>
+              <div class="query-answer-content">${data.answer}</div>
+            </div>
+          `;
+          
+          // 如果API未配置，顯示提示
+          html += `
+            <div class="alert alert-warning mt-3">
+              <h6 class="alert-heading"><i class="bi bi-info-circle"></i> 提示</h6>
+              <p class="mb-0">配置 AI API 可獲得更智能的回答。<a href="#api_config_section" class="alert-link" onclick="document.getElementById('api_config_section').classList.add('show')">點此配置</a></p>
+            </div>
+          `;
+        }
         
         // 來源部分
         if (data.sources && data.sources.length > 0) {

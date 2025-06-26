@@ -388,6 +388,68 @@ async def clear_all_status():
     logging.info("清除所有檔案狀態")
     return RedirectResponse("/ui", status_code=303)
 
+# ----------------- API配置相關端點 -----------------
+
+@app.get("/api_config_status")
+async def get_api_config_status():
+    """獲取API配置狀態"""
+    try:
+        from config_manager import ConfigManager
+        config_manager = ConfigManager()
+        return config_manager.get_api_status()
+    except Exception as e:
+        logging.error(f"獲取API配置狀態失敗: {e}")
+        return {"configured": False, "error": str(e)}
+
+@app.post("/save_api_config")
+async def save_api_config(
+    api_url: str = Form(...),
+    api_token: str = Form(...),
+    model_name: str = Form("gpt-3.5-turbo")
+):
+    """保存API配置"""
+    try:
+        from config_manager import ConfigManager
+        config_manager = ConfigManager()
+        
+        if config_manager.save_api_config(api_url, api_token, model_name):
+            return {"success": True, "message": "API配置保存成功"}
+        else:
+            return {"success": False, "message": "API配置保存失敗"}
+    except Exception as e:
+        logging.error(f"保存API配置失敗: {e}")
+        return {"success": False, "message": f"保存失敗: {str(e)}"}
+
+@app.post("/test_api_config")
+async def test_api_config(
+    api_url: str = Form(...),
+    api_token: str = Form(...),
+    model_name: str = Form("gpt-3.5-turbo")
+):
+    """測試API配置"""
+    try:
+        from openai_client import openai_client
+        result = await openai_client.test_connection(api_url, api_token, model_name)
+        return result
+    except Exception as e:
+        logging.error(f"測試API配置失敗: {e}")
+        return {"success": False, "message": f"測試失敗: {str(e)}"}
+
+@app.post("/delete_api_config")
+async def delete_api_config():
+    """刪除API配置"""
+    try:
+        from config_manager import ConfigManager
+        config_manager = ConfigManager()
+        
+        if config_manager.delete_api_config():
+            return {"success": True, "message": "API配置已刪除"}
+        else:
+            return {"success": False, "message": "刪除API配置失敗"}
+    except Exception as e:
+        logging.error(f"刪除API配置失敗: {e}")
+        return {"success": False, "message": f"刪除失敗: {str(e)}"}
+
 
 # ----------------- 啟動服務器 -----------------
 if __name__ == "__main__":
