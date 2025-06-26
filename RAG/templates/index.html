@@ -167,6 +167,33 @@
       opacity: 0.5;
       cursor: not-allowed;
     }
+    
+    /* 查詢區域文件選擇樣式 */
+    .query-file-checkbox {
+      transform: scale(1.1);
+    }
+    
+    #indexed_files_list .form-check {
+      margin-bottom: 8px;
+    }
+    
+    #indexed_files_list .form-check-label {
+      font-size: 0.9em;
+      cursor: pointer;
+      padding: 4px 8px;
+      border-radius: 4px;
+      transition: background-color 0.2s ease;
+    }
+    
+    #indexed_files_list .form-check-label:hover {
+      background-color: #e9ecef;
+    }
+    
+    #indexed_files_list .form-check-input:checked + .form-check-label {
+      background-color: #e3f2fd;
+      color: #1976d2;
+      font-weight: 500;
+    }
   </style>
 </head>
 <body>
@@ -309,6 +336,60 @@
               <div class="col-md-4">
                 <div class="d-flex align-items-center h-100">
                   <small class="text-muted">基於已索引的文檔內容進行智能問答</small>
+                </div>
+              </div>
+            </div>
+            
+            <!-- 文件選擇選項 -->
+            <div class="row mb-3">
+              <div class="col-12">
+                <div class="card bg-light border-0">
+                  <div class="card-body py-3">
+                    <div class="row align-items-center">
+                      <div class="col-auto">
+                        <label class="form-label mb-0 fw-semibold">
+                          <i class="bi bi-files"></i> 查詢範圍:
+                        </label>
+                      </div>
+                      <div class="col">
+                        <div class="d-flex flex-wrap gap-2" id="file_selection_area">
+                          <div class="form-check">
+                            <input class="form-check-input" type="radio" name="file_selection_mode" id="all_files" value="all" checked>
+                            <label class="form-check-label" for="all_files">
+                              <i class="bi bi-database"></i> 所有文檔
+                            </label>
+                          </div>
+                          <div class="form-check">
+                            <input class="form-check-input" type="radio" name="file_selection_mode" id="specific_files" value="specific">
+                            <label class="form-check-label" for="specific_files">
+                              <i class="bi bi-file-earmark-check"></i> 指定文檔
+                            </label>
+                          </div>
+                        </div>
+                      </div>
+                      <div class="col-auto">
+                        <button type="button" class="btn btn-outline-primary btn-sm" id="refresh_files_btn">
+                          <i class="bi bi-arrow-clockwise"></i> 刷新
+                        </button>
+                      </div>
+                    </div>
+                    
+                    <!-- 文件選擇區域 -->
+                    <div id="specific_files_area" class="mt-3" style="display: none;">
+                      <div class="border rounded p-3 bg-white">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                          <small class="text-muted">選擇要查詢的文檔：</small>
+                          <div>
+                            <button type="button" class="btn btn-outline-secondary btn-sm me-1" id="select_all_files_btn">全選</button>
+                            <button type="button" class="btn btn-outline-secondary btn-sm" id="clear_all_files_btn">清除</button>
+                          </div>
+                        </div>
+                        <div id="indexed_files_list" class="d-flex flex-wrap gap-2">
+                          <div class="text-muted">載入中...</div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -618,6 +699,129 @@
     // 初始化數量顯示
     updateTopKDisplay();
 
+    // 文件選擇相關功能
+    let indexedFiles = [];
+
+    // 載入已索引的文件列表
+    async function loadIndexedFiles() {
+      try {
+        const response = await fetch('/indexed_files');
+        const data = await response.json();
+        indexedFiles = data.files || [];
+        renderIndexedFiles();
+      } catch (error) {
+        console.error('載入文件列表失敗:', error);
+        document.getElementById('indexed_files_list').innerHTML = 
+          '<div class="text-danger">載入失敗，請稍後重試</div>';
+      }
+    }
+
+    // 渲染文件列表
+    function renderIndexedFiles() {
+      const container = document.getElementById('indexed_files_list');
+      
+      if (indexedFiles.length === 0) {
+        container.innerHTML = '<div class="text-muted">目前沒有已索引的文檔</div>';
+        return;
+      }
+
+      // HTML 轉義函數
+      function escapeHtml(unsafe) {
+        return unsafe
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;")
+          .replace(/'/g, "&#039;");
+      }
+
+      // 安全的 ID 生成函數，支援中文文件名
+      function generateSafeId(filename, index) {
+        // 使用索引和簡化的文件名來生成唯一 ID
+        const safeName = filename.replace(/[^a-zA-Z0-9]/g, '_');
+        return `file_${index}_${safeName}`;
+      }
+
+      // 創建文件選項元素
+      container.innerHTML = '';
+      
+      indexedFiles.forEach((filename, index) => {
+        const safeId = generateSafeId(filename, index);
+        const displayName = filename.length > 20 ? filename.substring(0, 17) + '...' : filename;
+        
+        // 創建 DOM 元素而不是使用 innerHTML，避免轉義問題
+        const checkDiv = document.createElement('div');
+        checkDiv.className = 'form-check form-check-inline';
+        
+        const checkbox = document.createElement('input');
+        checkbox.className = 'form-check-input query-file-checkbox';
+        checkbox.type = 'checkbox';
+        checkbox.id = safeId;
+        checkbox.value = filename; // 直接設置值，不需要轉義
+        
+        const label = document.createElement('label');
+        label.className = 'form-check-label';
+        label.setAttribute('for', safeId);
+        label.title = filename; // 直接設置 title，不需要轉義
+        label.innerHTML = `<i class="bi bi-file-earmark-text"></i> ${escapeHtml(displayName)}`;
+        
+        checkDiv.appendChild(checkbox);
+        checkDiv.appendChild(label);
+        container.appendChild(checkDiv);
+      });
+    }
+
+    // 文件選擇模式切換
+    document.querySelectorAll('input[name="file_selection_mode"]').forEach(radio => {
+      radio.addEventListener('change', function() {
+        const specificArea = document.getElementById('specific_files_area');
+        if (this.value === 'specific') {
+          specificArea.style.display = 'block';
+          if (indexedFiles.length === 0) {
+            loadIndexedFiles();
+          }
+        } else {
+          specificArea.style.display = 'none';
+        }
+      });
+    });
+
+    // 刷新文件列表按鈕
+    document.getElementById('refresh_files_btn').addEventListener('click', () => {
+      loadIndexedFiles();
+    });
+
+    // 全選按鈕
+    document.getElementById('select_all_files_btn').addEventListener('click', () => {
+      document.querySelectorAll('#indexed_files_list .query-file-checkbox').forEach(checkbox => {
+        checkbox.checked = true;
+      });
+    });
+
+    // 清除按鈕
+    document.getElementById('clear_all_files_btn').addEventListener('click', () => {
+      document.querySelectorAll('#indexed_files_list .query-file-checkbox').forEach(checkbox => {
+        checkbox.checked = false;
+      });
+    });
+
+    // 獲取選中的文件
+    function getSelectedFiles() {
+      const mode = document.querySelector('input[name="file_selection_mode"]:checked').value;
+      if (mode === 'all') {
+        return [];  // 空數組表示查詢所有文件
+      }
+      
+      const selectedFiles = [];
+      document.querySelectorAll('#indexed_files_list .query-file-checkbox:checked').forEach(checkbox => {
+        selectedFiles.push(checkbox.value);
+      });
+      return selectedFiles;
+    }
+
+    // 初始載入文件列表
+    loadIndexedFiles();
+
     // 查詢按鈕事件處理
     document.getElementById('query_btn').addEventListener('click', async () => {
       const q = document.getElementById('query_input').value.trim();
@@ -647,10 +851,17 @@
         // 獲取用戶設定的返回數量
         const topK = parseInt(document.getElementById('top_k_input').value) || 5;
         
+        // 獲取選中的文件
+        const selectedFiles = getSelectedFiles();
+        
         const resp = await fetch('/query', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ query: q, top_k: topK })
+          body: JSON.stringify({ 
+            query: q, 
+            top_k: topK,
+            filenames: selectedFiles
+          })
         });
         
         if (!resp.ok) {
@@ -670,9 +881,13 @@
         let html = '';
         
         // 查詢統計信息
+        const fileRangeText = selectedFiles.length > 0 
+          ? `限定範圍: ${selectedFiles.length} 個指定文檔` 
+          : '查詢範圍: 所有已索引文檔';
+        
         html += `
           <div class="query-stats">
-            <strong>📊 查詢統計:</strong> 請求 ${topK} 個結果，實際找到 ${data.sources.length} 個相關文檔片段
+            <strong>📊 查詢統計:</strong> ${fileRangeText} | 請求 ${topK} 個結果，實際找到 ${data.sources.length} 個相關文檔片段
             ${data.sources.length > 0 ? `，最高相似度: ${(data.sources[0].score * 100).toFixed(1)}%` : ''}
           </div>
         `;

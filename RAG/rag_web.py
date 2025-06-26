@@ -336,6 +336,24 @@ async def health_check():
 async def status():
     return StatusDict
 
+@app.get("/files")
+async def get_files():
+    """獲取已上傳文件列表及其狀態"""
+    try:
+        files = sorted([p.name for p in UPLOAD_DIR.iterdir() if p.is_file()])
+        file_info = []
+        for filename in files:
+            status = StatusDict.get(filename, "未索引")
+            file_info.append({
+                "filename": filename,
+                "status": status,
+                "is_indexed": status == "已索引"
+            })
+        return {"files": file_info}
+    except Exception as e:
+        logging.error(f"獲取文件列表失敗: {e}")
+        return {"files": []}
+
 @app.post("/reset_status")
 async def reset_status(filename: str = Form(...)):
     """重置特定檔案的狀態"""

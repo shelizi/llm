@@ -9,12 +9,20 @@ POST /query
 Body:
 {
   "query": "請問阿里山在哪裡？",
-  "top_k": 5          # 選填，預設 5，範圍 1-20
+  "top_k": 5,         # 選填，預設 5，範圍 1-20
+  "filenames": []     # 選填，指定要查詢的檔案名稱列表，空列表表示查詢所有檔案
 }
 
 Response:
 {
-  "answer": "..."
+  "answer": "...",
+  "sources": [...]
+}
+
+GET /indexed_files
+Response:
+{
+  "files": ["file1.txt", "file2.pdf", ...]
 }
 """
 
@@ -40,6 +48,7 @@ app = FastAPI(title="RAG API with LlamaIndex & Chroma")
 class QueryRequest(BaseModel):
     query: str
     top_k: int = Field(default=5, ge=1, le=20, description="返回的相似文檔數量，範圍1-20")
+    filenames: list[str] = Field(default=[], description="指定要查詢的檔案名稱列表，空列表表示查詢所有檔案")
 
 class SourceItem(BaseModel):
     filename: str
@@ -185,7 +194,24 @@ def query_endpoint(req: QueryRequest):
             raise HTTPException(status_code=503, detail="Index 尚未就緒，請稍後或先建置索引")
 
     # 改用純向量檢索，避免需要 LLM/OpenAI API KEY
-    retriever = index.as_retriever(similarity_top_k=req.top_k)
+    # 如果指定了文件名稱，則使用元數據過濾
+    if req.filenames:
+        from llama_index.core.vector_stores import MetadataFilters, MetadataFilter, FilterOperator
+        
+        # 創建文件名過濾器
+        filters = MetadataFilters(
+            filters=[
+                MetadataFilter(
+                    key="filename",
+                    value=req.filenames,
+                    operator=FilterOperator.IN
+                )
+            ]
+        )
+        retriever = index.as_retriever(similarity_top_k=req.top_k, filters=filters)
+    else:
+        retriever = index.as_retriever(similarity_top_k=req.top_k)
+    
     nodes = retriever.retrieve(req.query)
 
     if not nodes:
@@ -205,6 +231,44 @@ def query_endpoint(req: QueryRequest):
         )
 
     return QueryResponse(answer=answer_text, sources=sources)
+
+@app.get("/indexed_files")
+def get_indexed_files():
+    """獲取已索引的文件列表"""
+    global index
+    if index is None:
+        return {"files": []}
+    
+    try:
+        # 從向量存儲中獲取所有文檔的元數據
+        vector_store = index.vector_store
+        if hasattr(vector_store, '_collection'):
+            # 對於 ChromaVectorStore，直接查詢集合
+            collection = vector_store._collection
+            result = collection.get(include=['metadatas'])
+            
+            # 提取唯一的文件名
+            filenames = set()
+            if result and 'metadatas' in result:
+                for metadata in result['metadatas']:
+                    if metadata and 'filename' in metadata:
+                        filenames.add(metadata['filename'])
+            
+            return {"files": sorted(list(filenames))}
+        else:
+            # 備用方法：通過查詢獲取
+            retriever = index.as_retriever(similarity_top_k=100)  # 獲取較多結果
+            nodes = retriever.retrieve("*")  # 使用通配符查詢
+            
+            filenames = set()
+            for node in nodes:
+                if hasattr(node, 'metadata') and 'filename' in node.metadata:
+                    filenames.add(node.metadata['filename'])
+            
+            return {"files": sorted(list(filenames))}
+    except Exception as e:
+        logging.error(f"獲取已索引文件列表失敗: {e}")
+        return {"files": []}
 
 @app.get("/health")
 def health_check():
