@@ -162,10 +162,17 @@ def chat_cli(model_name: str, max_context_tokens: int = 2048, default_system_pro
             chat_pad.erase()
             y = 0
             for msg in history:
-                for wrapped in textwrap.wrap(msg, max_x - 2):
-                    if y < 999:
-                        chat_pad.addstr(y, 0, wrapped[:max_x - 1])
-                        y += 1
+                # Preserve explicit newlines by splitting first
+                for para in msg.split("\n"):
+                    # If the message itself had blank line (i.e., consecutive \n), show empty line
+                    if para == "":
+                        if y < 999:
+                            y += 1
+                        continue
+                    for wrapped in textwrap.wrap(para, max_x - 2):
+                        if y < 999:
+                            chat_pad.addstr(y, 0, wrapped[:max_x - 1])
+                            y += 1
             total_lines = y
             # Adjust scroll if auto-scroll is enabled or scroll beyond limits
             scroll = max(0, min(scroll, max(0, total_lines - chat_height)))
