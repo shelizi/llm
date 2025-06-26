@@ -7,7 +7,7 @@ from __future__ import annotations
 from pathlib import Path
 import logging
 import shutil
-from typing import Dict
+from typing import Dict, List
 
 import chromadb
 import json
@@ -301,12 +301,22 @@ async def upload_file(file: UploadFile = File(...)):
 
 
 @app.post("/index")
-async def index_file(background_tasks: BackgroundTasks, filename: str = Form(...), chunk_size: int = Form(512), overlap: int = Form(50)):
-    filepath = UPLOAD_DIR / filename
-    if not filepath.exists():
-        raise HTTPException(status_code=404, detail="File not found")
+async def index_files(
+    background_tasks: BackgroundTasks,
+    filenames: List[str] = Form(...),
+    chunk_size: int = Form(512),
+    overlap: int = Form(50)
+):
+    """接受多個檔案名稱，批次排入索引任務"""
+    if not filenames:
+        raise HTTPException(status_code=400, detail="未提供檔案名稱")
 
-    background_tasks.add_task(process_and_index_file, filename, filepath, chunk_size, overlap)
+    for filename in filenames:
+        filepath = UPLOAD_DIR / filename
+        if not filepath.exists():
+            logging.warning("檔案 %s 不存在，跳過索引", filename)
+            continue
+        background_tasks.add_task(process_and_index_file, filename, filepath, chunk_size, overlap)
     return RedirectResponse("/ui", status_code=303)
 
 
@@ -333,6 +343,23 @@ async def reset_status(filename: str = Form(...)):
         StatusDict[filename] = "未索引"
         save_status()
         logging.info(f"重置檔案狀態: {filename}")
+    return RedirectResponse("/ui", status_code=303)
+
+@app.post("/delete_file")
+async def delete_file(filename: str = Form(...)):
+    """刪除指定檔案並移除狀態"""
+    filepath = UPLOAD_DIR / filename
+    try:
+        if filepath.exists():
+            filepath.unlink()
+            logging.info("已刪除檔案: %s", filename)
+    except Exception as e:
+        logging.error("刪除檔案 %s 失敗: %s", filename, e)
+
+    if filename in StatusDict:
+        del StatusDict[filename]
+        save_status()
+
     return RedirectResponse("/ui", status_code=303)
 
 @app.post("/clear_all_status")

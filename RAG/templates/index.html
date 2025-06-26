@@ -53,8 +53,8 @@
           <div class="card-body">
             <form action="/index" method="post">
               <div class="mb-3">
-                <label for="filenameSelect" class="form-label">選擇檔案：</label>
-                <select name="filename" id="filenameSelect" class="form-select" required>
+                <label for="fileList" class="form-label">選擇檔案（可多選）：</label>
+                <select name="filenames" id="fileList" class="form-select" multiple size="8" required>
                   {% for f in files %}
                     <option value="{{ f }}">{{ f }}</option>
                   {% endfor %}
@@ -110,6 +110,10 @@
                             <button type="submit" class="btn btn-warning btn-sm">重試</button>
                           </form>
                         {% endif %}
+                        <form action="/delete_file" method="post" style="display: inline;" onsubmit="return confirm('確定要刪除 {{ f }}?');">
+                          <input type="hidden" name="filename" value="{{ f }}">
+                          <button type="submit" class="btn btn-danger btn-sm ms-1">刪除</button>
+                        </form>
                       </td>
                     </tr>
                   {% endfor %}
