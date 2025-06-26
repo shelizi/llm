@@ -22,6 +22,10 @@ from pathlib import Path
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 import logging
+from llama_index.core import Settings  # 新增
+
+# 全域停用 LLM，避免需要 OpenAI API KEY
+Settings.llm = None
 import torch
 import chromadb
 import os
@@ -149,7 +153,7 @@ def load_index() -> VectorStoreIndex:
         )
 
     storage_context = StorageContext.from_defaults(vector_store=vector_store)
-    embed_model = HuggingFaceEmbedding(model_name=EMBED_MODEL_NAME, device=DEVICE)
+    embed_model = HuggingFaceEmbedding(model_name=EMBED_MODEL_NAME, device=DEVICE, cache_folder=str(RAG_EMBEDDING_DIR))
 
     # 從 vector_store 建立 VectorStoreIndex
     idx = VectorStoreIndex.from_vector_store(vector_store=vector_store, embed_model=embed_model)
@@ -169,14 +173,29 @@ def _startup():
 # ----------------- API 端點 -----------------
 @app.post("/query", response_model=QueryResponse)
 def query_endpoint(req: QueryRequest):
+    global index
     if index is None:
-        raise HTTPException(status_code=503, detail="Index 尚未就緒，請稍後或先建置索引")
+        # 嘗試即時載入索引，以避免使用者已建好索引但尚未重啟服務
+        try:
+            logging.info("⚠️ 查詢時 index 為 None，嘗試重新載入索引 ...")
+            index = load_index()
+            logging.info("✅ 重新載入索引成功！")
+        except Exception as e:
+            logging.warning("❌ 重新載入索引失敗: %s", e)
+            raise HTTPException(status_code=503, detail="Index 尚未就緒，請稍後或先建置索引")
 
-    query_engine = index.as_query_engine(similarity_top_k=req.top_k)
-    resp = query_engine.query(req.query)
+    # 改用純向量檢索，避免需要 LLM/OpenAI API KEY
+    retriever = index.as_retriever(similarity_top_k=req.top_k)
+    nodes = retriever.retrieve(req.query)
+
+    if not nodes:
+        raise HTTPException(status_code=404, detail="查無相關內容")
+
+    # 以最高分節點內容做為簡易回答
+    answer_text = nodes[0].node.text.strip()
 
     sources: list[SourceItem] = []
-    for n in resp.source_nodes:
+    for n in nodes:
         sources.append(
             SourceItem(
                 filename=n.metadata.get("filename", ""),
@@ -184,4 +203,5 @@ def query_endpoint(req: QueryRequest):
                 score=round(float(n.score or 0), 4),
             )
         )
-    return QueryResponse(answer=resp.response, sources=sources)
+
+    return QueryResponse(answer=answer_text, sources=sources)
