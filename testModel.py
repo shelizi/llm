@@ -142,6 +142,15 @@ def chat_cli(model_name: str, max_context_tokens: int = 2048, default_system_pro
         curses.noecho()  # Disable automatic echoing of keys
         stdscr.keypad(True)
 
+        # Initialize color pairs for simple Markdown highlighting
+        curses.start_color()
+        curses.use_default_colors()
+        # Pair numbers: 1=code, 2=heading, 3=list, 4=blockquote
+        curses.init_pair(1, curses.COLOR_CYAN, -1)      # Code blocks / inline code
+        curses.init_pair(2, curses.COLOR_YELLOW, -1)    # Headings
+        curses.init_pair(3, curses.COLOR_GREEN, -1)     # List items
+        curses.init_pair(4, curses.COLOR_MAGENTA, -1)   # Blockquotes
+
         max_y, max_x = stdscr.getmaxyx()
         chat_height = max_y - 3  # space for input box
         chat_pad = curses.newpad(1000, max_x)
@@ -161,17 +170,40 @@ def chat_cli(model_name: str, max_context_tokens: int = 2048, default_system_pro
             nonlocal total_lines, scroll
             chat_pad.erase()
             y = 0
+            in_code_block = False
             for msg in history:
                 # Preserve explicit newlines by splitting first
                 for para in msg.split("\n"):
-                    # If the message itself had blank line (i.e., consecutive \n), show empty line
+                    # Detect code block delimiters ```
+                    if para.strip().startswith("```"):
+                        in_code_block = not in_code_block
+                        # Skip the delimiter line itself
+                        if y < 999:
+                            y += 1
+                        continue
+
+                    # Blank line handling
                     if para == "":
                         if y < 999:
                             y += 1
                         continue
+
+                    # Choose attribute based on markdown context
+                    attr = curses.A_NORMAL
+                    if in_code_block:
+                        attr = curses.color_pair(1)
+                    elif para.startswith("#"):
+                        attr = curses.color_pair(2) | curses.A_BOLD
+                    elif para.lstrip().startswith(('- ','* ','+ ')):
+                        attr = curses.color_pair(3)
+                    elif para.lstrip().startswith('>'):
+                        attr = curses.color_pair(4)
+                    elif '`' in para:
+                        attr = curses.color_pair(1)
+
                     for wrapped in textwrap.wrap(para, max_x - 2):
                         if y < 999:
-                            chat_pad.addstr(y, 0, wrapped[:max_x - 1])
+                            chat_pad.addstr(y, 0, wrapped[:max_x - 1], attr)
                             y += 1
             total_lines = y
             # Adjust scroll if auto-scroll is enabled or scroll beyond limits
