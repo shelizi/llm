@@ -38,12 +38,25 @@
 
   <!-- 檔案狀態 -->
   <h2>檔案狀態</h2>
+  <div style="margin-bottom: 1rem;">
+    <form action="/clear_all_status" method="post" style="display: inline;">
+      <button type="submit" onclick="return confirm('確定要清除所有檔案狀態嗎？')">清除所有狀態</button>
+    </form>
+  </div>
   <table>
-    <tr><th>檔案名稱</th><th>索引狀態</th></tr>
+    <tr><th>檔案名稱</th><th>索引狀態</th><th>操作</th></tr>
     {% for f in files %}
       <tr>
         <td>{{ f }}</td>
-        <td>{{ statuses[f] }}</td>
+        <td class="status-cell" data-filename="{{ f }}">{{ statuses[f] }}</td>
+        <td>
+          {% if statuses[f].startswith('錯誤') %}
+            <form action="/reset_status" method="post" style="display: inline;">
+              <input type="hidden" name="filename" value="{{ f }}">
+              <button type="submit" style="background: orange; color: white; border: none; padding: 2px 8px; border-radius: 3px;">重試</button>
+            </form>
+          {% endif %}
+        </td>
       </tr>
     {% endfor %}
   </table>
@@ -54,11 +67,26 @@
   <button id="query_btn">查詢</button>
   <pre id="query_result" style="white-space: pre-wrap; border:1px solid #ccc; padding:8px; margin-top:1rem; height:160px; overflow:auto;"></pre>
 
-  <p>本頁每 10 秒自動重新整理索引狀態。</p>
+  <p>本頁每 10 秒自動更新索引狀態（無須整頁刷新）。</p>
 
   <script>
-    // 自動刷新頁面，以便更新檔案狀態 (10 秒)
-    setTimeout(() => location.reload(), 10000);
+    // 以 Ajax 方式每 10 秒更新檔案狀態，避免整頁刷新
+    async function updateStatusTable() {
+      try {
+        const resp = await fetch('/status');
+        if (!resp.ok) return;
+        const data = await resp.json();
+        document.querySelectorAll('.status-cell').forEach(td => {
+          const name = td.dataset.filename;
+          if (data[name] !== undefined) td.textContent = data[name];
+        });
+      } catch (e) {
+        console.error('Status update failed', e);
+      }
+    }
+    // 初始與每 10 秒更新一次
+    updateStatusTable();
+    setInterval(updateStatusTable, 10000);
 
     document.getElementById('query_btn').addEventListener('click', async () => {
       const q = document.getElementById('query_input').value.trim();
