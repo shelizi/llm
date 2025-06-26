@@ -13,8 +13,11 @@ VLLM_API_URL = "http://localhost:80/v1/chat/completions"
 VLLM_MODELS_URL = "http://localhost:80/v1/models"
 HEADERS = {"Content-Type": "application/json"}
 
+# Default system prompt
+DEFAULT_SYSTEM_PROMPT = "You are a helpful assistant."
 
-def get_vllm_completion(prompt: str, model_name: str, max_tokens: int = 1024, temperature: float = 0.7) -> str:
+
+def get_vllm_completion(prompt: str, model_name: str, max_tokens: int = 1024, temperature: float = 0.7, system_prompt: str = DEFAULT_SYSTEM_PROMPT) -> str:
     """Send a completion request to vLLM and return the assistant's reply text."""
     payload = {
         "model": model_name,
@@ -34,7 +37,7 @@ def get_vllm_completion(prompt: str, model_name: str, max_tokens: int = 1024, te
     except requests.exceptions.RequestException as e:
         return f"[Error] Request failed: {e}"
 
-def stream_vllm(prompt: str, model_name: str, temperature: float = 0.7):
+def stream_vllm(prompt: str, model_name: str, temperature: float = 0.7, system_prompt: str = DEFAULT_SYSTEM_PROMPT):
     """Yield response chunks from vLLM in streaming mode."""
     payload = {
         "model": model_name,
@@ -67,7 +70,7 @@ def stream_vllm(prompt: str, model_name: str, temperature: float = 0.7):
         yield f"[Error] Request failed: {e}"
 
 
-def chat_cli(model_name: str, max_context_tokens: int = 2048):
+def chat_cli(model_name: str, max_context_tokens: int = 2048, default_system_prompt: str = DEFAULT_SYSTEM_PROMPT):
     """Interactive curses-based chat UI with scrollable history.
 
     Adds real-time TPS (tokens per second) statistics and displays the
@@ -78,6 +81,12 @@ def chat_cli(model_name: str, max_context_tokens: int = 2048):
     import curses
     import textwrap
 
+    # Current system prompt (can be updated via /system command)
+    system_prompt = default_system_prompt
+    # Runtime-tunable parameters
+    max_tokens = 1024          # Default number of tokens the model may generate
+    temperature = 0.7          # Sampling temperature (0 = deterministic)
+
     # --- Helper utilities (simple, fast approximations) ---
     def _estimate_tokens(text: str) -> int:
         """Rudimentary token estimation (whitespace split)."""
@@ -85,7 +94,7 @@ def chat_cli(model_name: str, max_context_tokens: int = 2048):
 
     def _build_messages(conv, user_prompt: str):
         """Build message list with history and respect token budget."""
-        system_msg = {"role": "system", "content": "You are a helpful assistant."}
+        system_msg = {"role": "system", "content": system_prompt}
         messages = [system_msg]
         # Remaining budget after adding system and upcoming user prompt
         remaining = max_context_tokens - _estimate_tokens(system_msg["content"]) - _estimate_tokens(user_prompt)
@@ -98,12 +107,12 @@ def chat_cli(model_name: str, max_context_tokens: int = 2048):
         messages.append({"role": "user", "content": user_prompt})
         return messages
 
-    def _stream_vllm_messages(messages, temperature: float = 0.7):
+    def _stream_vllm_messages(messages):
         """Yield streamed tokens from vLLM given a full message list."""
         payload = {
             "model": model_name,
             "messages": messages,
-            "max_tokens": 1024,
+            "max_tokens": max_tokens,
             "temperature": temperature,
             "stream": True,
         }
@@ -128,6 +137,7 @@ def chat_cli(model_name: str, max_context_tokens: int = 2048):
             yield f"[Error] Request failed: {e}"
 
     def _run(stdscr):
+        nonlocal system_prompt, max_context_tokens, max_tokens, temperature
         curses.curs_set(1)
         stdscr.keypad(True)
 
@@ -141,6 +151,7 @@ def chat_cli(model_name: str, max_context_tokens: int = 2048):
         conversation = []     # For building context (list of (role, content))
         scroll = 0
         current_input = ""
+        last_redraw = 0  # Track last UI refresh time
 
         def redraw():
             chat_pad.clear()
@@ -165,6 +176,48 @@ def chat_cli(model_name: str, max_context_tokens: int = 2048):
                 if prompt.lower() in ("exit", "quit"):
                     break
                 if prompt:
+                    # Handle runtime configuration commands
+                    if prompt.lower().startswith("/system"):
+                        new_prompt = prompt[len("/system"):].strip()
+                        if new_prompt:
+                            system_prompt = new_prompt
+                            history.append(f"[System prompt updated] {system_prompt}")
+                        else:
+                            system_prompt = default_system_prompt
+                            history.append(f"[System prompt reset to default] {system_prompt}")
+                        redraw()
+                        current_input = ""
+                        continue
+                    elif prompt.lower().startswith("/max_context"):
+                        value = prompt[len("/max_context"):].strip()
+                        if value.isdigit():
+                            max_context_tokens = int(value)
+                            history.append(f"[max_context_tokens updated] {max_context_tokens}")
+                        else:
+                            history.append("[Error] Invalid value for max_context_tokens (expect integer)")
+                        redraw()
+                        current_input = ""
+                        continue
+                    elif prompt.lower().startswith("/max_tokens"):
+                        value = prompt[len("/max_tokens"):].strip()
+                        if value.isdigit():
+                            max_tokens = int(value)
+                            history.append(f"[max_tokens updated] {max_tokens}")
+                        else:
+                            history.append("[Error] Invalid value for max_tokens (expect integer)")
+                        redraw()
+                        current_input = ""
+                        continue
+                    elif prompt.lower().startswith("/temperature"):
+                        value = prompt[len("/temperature"):].strip()
+                        try:
+                            temperature = float(value)
+                            history.append(f"[temperature updated] {temperature}")
+                        except ValueError:
+                            history.append("[Error] Invalid value for temperature (expect float)")
+                        redraw()
+                        current_input = ""
+                        continue
                     # Prepare context
                     messages = _build_messages(conversation, prompt)
                     ctx_tokens = sum(_estimate_tokens(m["content"]) for m in messages)
@@ -187,11 +240,18 @@ def chat_cli(model_name: str, max_context_tokens: int = 2048):
                         tps = tokens_seen / elapsed
                         input_win.addstr(0, 2, f"TPS: {tps:.1f} | Ctx: {ctx_tokens}".ljust(max_x - 4))
                         input_win.refresh()
-                        redraw()
+
+                        # Throttle screen refresh to at most ~20 FPS (50ms)
+                        now = time.time()
+                        if now - last_redraw >= 0.05:
+                            redraw()
+                            last_redraw = now
 
                     # Update conversation history for next turn
                     conversation.append(("user", prompt))
                     conversation.append(("assistant", assistant_reply))
+                    # Final redraw to ensure full answer visible
+                    redraw()
                 current_input = ""
             elif ch in (curses.KEY_BACKSPACE, 127, 8):
                 current_input = current_input[:-1]
@@ -229,7 +289,7 @@ def get_first_available_model():
         print(f"Detailed error: {e}")
         return None
 
-def query_vllm_once(prompt: str, model_name: str):
+def query_vllm_once(prompt: str, model_name: str, system_prompt: str = DEFAULT_SYSTEM_PROMPT):
     """Send a request and retrieve the complete response in a single call."""
     payload = {
         "model": model_name,
@@ -256,7 +316,7 @@ def query_vllm_once(prompt: str, model_name: str):
     except requests.exceptions.RequestException as e:
         print(f"❌ Request failed: {e}")
 
-def query_vllm_stream(prompt: str, model_name: str):
+def query_vllm_stream(prompt: str, model_name: str, system_prompt: str = DEFAULT_SYSTEM_PROMPT):
     """Send a request and process the response in streaming mode."""
     payload = {
         "model": model_name,
@@ -301,6 +361,7 @@ def main():
     parser.add_argument("--stream", action="store_true", help="Receive the response in streaming mode.")
     parser.add_argument("-i", "--interactive", action="store_true", help="Start an interactive chat session (PageUp/PageDown to scroll history).")
     parser.add_argument("--max-context", type=int, default=2048, help="Maximum approximate tokens to include in the context when chatting.")
+    parser.add_argument("--system-prompt", "-s", type=str, default=DEFAULT_SYSTEM_PROMPT, help="Custom system prompt for the model.")
     
     args = parser.parse_args()
 
@@ -311,15 +372,15 @@ def main():
 
         # Interactive chat
     if args.interactive or args.prompt is None:
-        chat_cli(model_name, args.max_context)
+        chat_cli(model_name, args.max_context, args.system_prompt)
         return
 
     print(f"💬 Sending question: \"{args.prompt}\"")
 
     if args.stream:
-        query_vllm_stream(args.prompt, model_name)
+        query_vllm_stream(args.prompt, model_name, args.system_prompt)
     else:
-        query_vllm_once(args.prompt, model_name)
+        query_vllm_once(args.prompt, model_name, args.system_prompt)
 
 if __name__ == "__main__":
     main()
