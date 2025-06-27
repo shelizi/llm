@@ -84,6 +84,19 @@
   - 無需複雜分塊策略
   - 適合處理完整文檔或章節
 
+### 4. Linq-AI-Research/Linq-Embed-Mistral
+**類型**：高效能通用型
+- **開發團隊**：Linq AI Research
+- **基礎架構**：Mistral
+- **參數量**：7B
+- **嵌入維度**4096
+- **最大序列長度**：32768 tokens
+- **語言支援**：多語言（含中文）
+- **特點**：
+  - 在 MMTEB 基準測試中表現優異
+  - 支援多語言檢索任務
+  - 經過指令微調，適合零樣本檢索
+
 ## 向量資料庫選擇
 
 - **LlamaIndex SimpleVectorStore**
