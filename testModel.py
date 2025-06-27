@@ -170,6 +170,17 @@ def chat_cli(model_name: str, max_context_tokens: int = 2048, default_system_pro
         cmd_history = []        # Past entered prompts/commands
         hist_idx = 0            # Index into cmd_history (len = newest)
 
+        command_list = [
+            "/system",
+            "/max_context",
+            "/max_tokens",
+            "/temperature",
+            "/clear",
+            "/settings",
+            "exit",
+            "quit",
+        ]
+
         last_redraw = 0         # Track last UI refresh time
 
         def redraw():
@@ -285,6 +296,19 @@ def chat_cli(model_name: str, max_context_tokens: int = 2048, default_system_pro
                         redraw()
                         current_input = ""
                         continue
+                    elif prompt.lower().startswith("/settings"):
+                        settings_msg = (
+                            "[Current settings]\n"
+                            f"Model: {model_name}\n"
+                            f"System prompt: {system_prompt}\n"
+                            f"max_context_tokens: {max_context_tokens}\n"
+                            f"max_tokens: {max_tokens}\n"
+                            f"temperature: {temperature}"
+                        )
+                        history.append(settings_msg)
+                        redraw()
+                        current_input = ""
+                        continue
                     elif prompt.lower().startswith("/clear"):
                         # Clear chat history and context
                         history.clear()
@@ -342,6 +366,14 @@ def chat_cli(model_name: str, max_context_tokens: int = 2048, default_system_pro
                 if cursor_pos > 0:
                     current_input = current_input[:cursor_pos-1] + current_input[cursor_pos:]
                     cursor_pos -= 1
+            elif ch == 9:  # Tab key for autocomplete
+                prefix = current_input[:cursor_pos]
+                # Only autocomplete commands that start with '/' and have no space yet
+                if prefix.startswith("/") and " " not in prefix:
+                    matches = [cmd for cmd in command_list if cmd.startswith(prefix)]
+                    if matches:
+                        current_input = matches[0] + current_input[cursor_pos:]
+                        cursor_pos = len(matches[0])
             elif ch == curses.KEY_LEFT:
                 if cursor_pos > 0:
                     cursor_pos -= 1
