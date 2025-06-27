@@ -22,3 +22,5 @@ langchain
 faiss-cpu
 torch
 transformers
+chainlit
+streamlit
