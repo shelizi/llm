@@ -95,7 +95,7 @@ xlrd
 xlsxwriter
 csvkit
 chardet
-textract
+#textract
 easyocr
 pdf2image
 pdfminer.six
@@ -104,7 +104,7 @@ tika-python
 # Audio/Video processing
 librosa
 moviepy
-speech-recognition
+#speech-recognition
 
 # Archive handling
 patool
