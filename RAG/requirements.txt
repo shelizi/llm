@@ -26,3 +26,88 @@ chainlit
 streamlit
 qdrant-client
 weaviate-client
+
+# --- Additional useful packages for LangChain/LlamaIndex ---
+# Document loaders and parsers
+unstructured
+pytesseract
+python-pptx
+openpyxl
+tabulate
+markdown
+
+# Vector stores and databases
+pinecone-client
+redis
+elasticsearch
+pymongo
+
+# Text processing and NLP
+spacy
+nltk
+textstat
+langdetect
+
+# Memory and caching
+redis
+sqlalchemy
+sqlite3
+
+# Observability and monitoring
+langfuse
+wandb
+mlflow
+
+# Additional LLM providers
+anthropic
+cohere
+replicate
+
+# Async and concurrency
+asyncio
+aioredis
+
+# Image processing (for multimodal)
+pillow
+opencv-python
+
+# Web scraping and crawling
+beautifulsoup4
+scrapy
+playwright
+
+# API and networking
+httpx
+requests-cache
+
+# Configuration and environment
+python-dotenv
+pyyaml
+
+# Logging and debugging
+loguru
+rich
+
+# Additional file processing libraries
+docx2txt
+pdfplumber
+pymupdf  # also known as fitz
+xlrd
+xlsxwriter
+csvkit
+chardet
+textract
+easyocr
+pdf2image
+pdfminer.six
+tika-python
+
+# Audio/Video processing
+librosa
+moviepy
+speech-recognition
+
+# Archive handling
+patool
+rarfile
+py7zr
