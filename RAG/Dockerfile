@@ -17,26 +17,18 @@ WORKDIR /app
 # 建立 Python 虛擬環境 (選用) - 此處直接使用系統 Python
 
 # ---------- 安裝 Python 相依套件 ----------
+# 先複製 requirements.txt 以利用 Docker 快取層
+COPY requirements.txt /app/requirements.txt
+
 RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir \
-        llama-index==0.10.29 \
-        chromadb==0.4.24 \
-        sentence-transformers==2.6.1 \
-        accelerate==0.30.1 \
-        fastapi==0.111.0 \
-        "uvicorn[standard]==0.30.0" \
-        aiofiles==23.2.1 \
-        python-multipart==0.0.9 \
-        jinja2==3.1.3 \
-        python-docx==1.1.2 \
-        PyPDF2==3.0.1
-    && rm -rf /root/.cache/pip
+    pip install --no-cache-dir -r requirements.txt && \
+    rm -rf /root/.cache/pip
 
 # ---------- 環境變數 ----------
-# 將模型快取路徑指向 /models，啟動 container 時以 -v <host_path>:/models 掛載即可共用
-ENV HF_HOME=/models \
-    TRANSFORMERS_CACHE=/models \
-    TORCH_HOME=/models
+# 將模型快取路徑指向 /models/cache，啟動 container 時以 -v <host_path>:/models 掛載即可共用
+ENV HF_HOME=/models/cache \
+    TRANSFORMERS_CACHE=/models/cache \
+    TORCH_HOME=/models/cache
 
 # 將專案程式碼複製進容器
 COPY . /app

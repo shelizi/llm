@@ -21,13 +21,17 @@ services:
       - ../.env
     environment:
       - NVIDIA_VISIBLE_DEVICES=all
+      # 統一模型緩存路徑配置
+      - HF_HOME=/models/cache
+      - TRANSFORMERS_CACHE=/models/cache
+      - TORCH_HOME=/models/cache
 
     ports:
       - "8000:8000"
     volumes:
-      # 共用模型快取資料夾
+      # 統一模型目錄 (包含 embedding, llm, cache 子目錄)
       - ./models:/models
-      # ChromaDB 持久化資料夾 (選擇性)
+      # ChromaDB 持久化資料夾
       - ./chroma_db:/app/chroma_db
 
     command: ["uvicorn", "rag_api:app", "--host", "0.0.0.0", "--port", "8000"]

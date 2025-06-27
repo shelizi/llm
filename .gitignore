@@ -1,0 +1,5 @@
+RAG/models
+RAG/chroma_db
+RAG/__pycache__
+RAG/uploads
+RAG/status.json
