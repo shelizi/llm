@@ -25,6 +25,7 @@ services:
       - HF_HOME=/models/cache
       - TRANSFORMERS_CACHE=/models/cache
       - TORCH_HOME=/models/cache
+      - SENTENCE_TRANSFORMERS_HOME=/models/embedding
 
     ports:
       - "8000:8000"

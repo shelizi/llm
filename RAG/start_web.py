@@ -35,6 +35,11 @@ def main():
             import rag_api
             from rag_api import check_and_download_embedding_model
             
+            # 顯示當前使用的模型路徑
+            logging.info(f"📁 模型根目錄: {rag_api.RAG_MODELS_DIR}")
+            logging.info(f"📁 緩存目錄: {rag_api.RAG_CACHE_DIR}")
+            logging.info(f"📁 Embedding 目錄: {rag_api.RAG_EMBEDDING_DIR}")
+            
             # 需要預先檢查/下載的嵌入模型 (參考 README)
             embedding_models = [
                 rag_api.EMBED_MODEL_NAME,  # 預設模型

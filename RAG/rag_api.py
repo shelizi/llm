@@ -69,9 +69,17 @@ EMBED_MODEL_NAME = "intfloat/multilingual-e5-large-instruct"
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
 # 模型路徑配置
-RAG_MODELS_DIR = Path(__file__).parent / "models"
-RAG_CACHE_DIR = RAG_MODELS_DIR / "cache"
-RAG_EMBEDDING_DIR = RAG_MODELS_DIR / "embedding"
+# 檢查是否在 Docker 容器內 (透過掛載的 /models 目錄)
+if Path("/models").exists() and Path("/models").is_dir():
+    # Docker 容器內，使用掛載的路徑
+    RAG_MODELS_DIR = Path("/models")
+    RAG_CACHE_DIR = RAG_MODELS_DIR / "cache"
+    RAG_EMBEDDING_DIR = RAG_MODELS_DIR / "embedding"
+else:
+    # 本地開發環境，使用相對路徑
+    RAG_MODELS_DIR = Path(__file__).parent / "models"
+    RAG_CACHE_DIR = RAG_MODELS_DIR / "cache"
+    RAG_EMBEDDING_DIR = RAG_MODELS_DIR / "embedding"
 
 # 確保模型目錄存在
 RAG_MODELS_DIR.mkdir(exist_ok=True)

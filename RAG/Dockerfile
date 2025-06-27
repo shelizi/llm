@@ -30,6 +30,9 @@ ENV HF_HOME=/models/cache \
     TRANSFORMERS_CACHE=/models/cache \
     TORCH_HOME=/models/cache
 
+# 創建模型目錄結構 (確保掛載點可用)
+RUN mkdir -p /models/cache /models/embedding
+
 # 將專案程式碼複製進容器
 COPY . /app
 
