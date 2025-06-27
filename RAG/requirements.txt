@@ -51,15 +51,6 @@ langdetect
 redis
 sqlalchemy
 
-# Observability and monitoring
-langfuse
-wandb
-mlflow
-
-# Additional LLM providers
-anthropic
-cohere
-replicate
 
 # Async and concurrency
 asyncio
@@ -82,9 +73,6 @@ requests-cache
 python-dotenv
 pyyaml
 
-# Logging and debugging
-loguru
-rich
 
 # Additional file processing libraries
 docx2txt
