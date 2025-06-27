@@ -34,6 +34,5 @@ services:
       # ChromaDB 持久化資料夾
       - ./chroma_db:/app/chroma_db
 
-    command: ["uvicorn", "rag_web:app", "--host", "0.0.0.0", "--port", "8000"]
-
+    command: ["python", "start_web.py"]
     restart: unless-stopped
