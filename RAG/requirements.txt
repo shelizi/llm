@@ -24,3 +24,5 @@ torch
 transformers
 chainlit
 streamlit
+qdrant-client
+weaviate-client
