@@ -13,6 +13,7 @@ services:
     ports:
       - "80:8000"
     command: --model /models/Phi-4-reasoning-plus-Q8_0.gguf --trust-remote-code --tensor-parallel-size 2 --gpu-memory-utilization 0.9
+    restart: unless-stopped
     deploy:
       resources:
         reservations:

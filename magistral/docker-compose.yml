@@ -13,6 +13,7 @@ services:
     ports:
       - "80:8000"
     command: --model /models/Magistral-Small-2506-UD-Q8_K_XL.gguf --trust-remote-code --tensor-parallel-size 2 --gpu-memory-utilization 0.9
+    restart: unless-stopped
     deploy:
       resources:
         reservations:
