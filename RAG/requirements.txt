@@ -99,7 +99,7 @@ chardet
 easyocr
 pdf2image
 pdfminer.six
-tika-python
+#tika-python
 
 # Audio/Video processing
 librosa
