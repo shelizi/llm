@@ -30,6 +30,8 @@ from pathlib import Path
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 import logging
+from typing import List
+from huggingface_hub import HfApi
 from llama_index.core import Settings  # 新增
 
 # 全域停用 LLM，避免需要 OpenAI API KEY
@@ -66,6 +68,14 @@ class QueryResponse(BaseModel):
 CHROMA_DIR = Path(__file__).parent / "chroma_db"
 COLLECTION_NAME = "taiwan_demo"  # 與 build_index 中保持一致
 EMBED_MODEL_NAME = "intfloat/multilingual-e5-large-instruct"
+
+# 預先檢查/下載的嵌入模型清單 (可於其他模組覆寫或傳入自定義列表)
+DEFAULT_EMBEDDING_MODELS: List[str] = [
+    EMBED_MODEL_NAME,
+    "nomic-ai/nomic-embed-text-v2",
+    "jinaai/jina-embeddings-v2-base-zh",
+    "Linq-AI-Research/Linq-Embed-Mistral",
+]
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
 # 模型路徑配置
@@ -97,6 +107,18 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(
 # ----------------- 載入索引 -----------------
 index: VectorStoreIndex | None = None
 
+def suggest_similar_models(query: str, limit: int = 5) -> List[str]:
+    """Search Hugging Face Hub for models with names similar to the query."""
+    try:
+        api = HfApi()
+        # Search both by repo id and tags in full-text mode
+        results = api.search_models(full_text_search=query, limit=limit)
+        return [item.modelId for item in results]
+    except Exception as e:
+        logging.debug(f"🔍 Hugging Face search failed: {e}")
+        return []
+
+
 def check_and_download_embedding_model(model_name: str = EMBED_MODEL_NAME, max_retries: int = 3) -> bool:
     """Checks and downloads the embedding model, retrying on failure."""
     os.environ['SENTENCE_TRANSFORMERS_HOME'] = str(RAG_EMBEDDING_DIR)
@@ -127,7 +149,37 @@ def check_and_download_embedding_model(model_name: str = EMBED_MODEL_NAME, max_r
                 time.sleep(5)
     
     logging.error(f"❌ Failed to load embedding model after {max_retries} attempts.")
+
+    # 額外步驟: 嘗試在 Hugging Face Hub 搜尋相似模型名稱並提供建議
+    similar = suggest_similar_models(model_name)
+    if similar:
+        logging.info("🔍 找到可能的相似模型名稱，請確認是否拼寫錯誤或選擇下列其中之一：")
+        for s in similar:
+            logging.info(f"  • {s}")
+    else:
+        logging.info("🔍 未在 Hugging Face Hub 找到相似模型名稱，請再次確認輸入是否正確。")
+
     return False
+
+
+def check_and_download_embedding_models(model_names: List[str] | None = None) -> tuple[list[str], list[str]]:
+    """Bulk check/download for a list of embedding models.
+
+    Returns (ok_models, failed_models) lists.
+    """
+    if model_names is None:
+        model_names = DEFAULT_EMBEDDING_MODELS
+
+    ok_models: list[str] = []
+    failed_models: list[str] = []
+    for name in model_names:
+        logging.info(f"🔎 檢查模型 {name} ...")
+        if check_and_download_embedding_model(name):
+            ok_models.append(name)
+        else:
+            failed_models.append(name)
+
+    return ok_models, failed_models
 
 def load_index() -> VectorStoreIndex:
     """從已存在的 ChromaDB collection 載入索引"""

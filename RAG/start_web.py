@@ -33,29 +33,15 @@ def main():
         try:
             # 先導入 rag_api 來設置環境變數和檢查模型
             import rag_api
-            from rag_api import check_and_download_embedding_model
+            
             
             # 顯示當前使用的模型路徑
             logging.info(f"📁 模型根目錄: {rag_api.RAG_MODELS_DIR}")
             logging.info(f"📁 緩存目錄: {rag_api.RAG_CACHE_DIR}")
             logging.info(f"📁 Embedding 目錄: {rag_api.RAG_EMBEDDING_DIR}")
             
-            # 需要預先檢查/下載的嵌入模型 (參考 README)
-            embedding_models = [
-                rag_api.EMBED_MODEL_NAME,  # 預設模型
-                "nomic-ai/nomic-embed-text-v2",
-                "jinaai/jina-embeddings-v2-base-zh",
-                "Linq-AI-Research/Linq-Embed-Mistral",
-            ]
-
-            ok_models: list[str] = []
-            failed_models: list[str] = []
-            for model_name in embedding_models:
-                logging.info(f"🔎 檢查模型 {model_name} ...")
-                if check_and_download_embedding_model(model_name):
-                    ok_models.append(model_name)
-                else:
-                    failed_models.append(model_name)
+            # 執行模型檢查（會自動使用預設清單或自定義列表）
+            ok_models, failed_models = rag_api.check_and_download_embedding_models()
 
             logging.info(
                 "✅ 模型檢查完成，成功: %s，失敗: %s",
