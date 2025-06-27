@@ -51,7 +51,6 @@ langdetect
 # Memory and caching
 redis
 sqlalchemy
-sqlite3
 
 # Observability and monitoring
 langfuse
