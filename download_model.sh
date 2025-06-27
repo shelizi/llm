@@ -84,17 +84,19 @@ URL="${MODEL_URLS[$choice]}"
 read -p "Do you want to run the download in background? (y/N): " bg_choice
 if [[ "$bg_choice" =~ ^[Yy]$ ]]; then
   echo "Starting $MODEL_NAME download in background (job)..."
-  # Run in background as a shell job attached to the current shell session
-  curl -L -o "$MODELS_DIR/$OUTPUT_FILE" "$URL" > "$MODELS_DIR/$OUTPUT_FILE.log" 2>&1 &
+  # 使用 nohup 在後台下載，確保即使關閉終端機也能持續
+  nohup curl -L -o "$MODELS_DIR/$OUTPUT_FILE" "$URL" > "$MODELS_DIR/$OUTPUT_FILE.log" 2>&1 &
   pid=$!
+  # 解除與目前 shell 的關聯，避免 SIGHUP 中斷
+  disown "$pid"
   # Save PID so it can be referenced later even if job control isn't available
   echo "$pid" > "$MODELS_DIR/$OUTPUT_FILE.pid"
   echo "Download PID: $pid"
   echo "Log file    : $MODELS_DIR/$OUTPUT_FILE.log"
   echo
   echo "Tips:"
-  echo "  • If you sourced this script ('. download_model.sh'), use 'jobs' then 'fg %%' to bring it back to foreground."
-  echo "  • Otherwise, monitor progress with 'tail -f \"$MODELS_DIR/$OUTPUT_FILE.log\"' or wait for completion using 'wait $pid'."
+  echo "  • 透過 'tail -f \"$MODELS_DIR/$OUTPUT_FILE.log\"' 觀察下載進度。"
+  echo "  • 使用 'ps -p $pid -o %cpu,%mem,etime,cmd' 查看程序狀態，或稍後透過 'kill -TERM $pid' 取消下載。"
   exit 0
 fi
 
