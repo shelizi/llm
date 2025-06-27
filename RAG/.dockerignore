@@ -1,0 +1,50 @@
+# 忽略模型目錄 - 在運行時通過 volume 掛載
+models/
+models
+
+# 忽略緩存目錄
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+.hypothesis/
+.mypy_cache/
+
+# 忽略 ChromaDB 相關文件 - 在運行時通過 volume 掛載
+chroma_db/
+
+# 忽略環境和設置文件
+.env
+.venv
+env/
+venv/
+ENV/
+
+# 忽略版本控制相關
+.git
+.gitignore
+
+# 忽略編輯器配置
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# 忽略操作系統文件
+.DS_Store
+Thumbs.db
+
+# 忽略上傳文件目錄
+uploads/
+
+# 忽略日誌文件
+*.log
+
+# 忽略 Docker 相關文件本身
+Dockerfile
+docker-compose.yml
+.dockerignore
