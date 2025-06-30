@@ -14,7 +14,7 @@ services:
       - ~/vllm/llm/models-template:/models-template
     ports:
       - "80:8000"
-    command: --model /models/starcoder2-15b-Q8_0.gguf --trust-remote-code --tensor-parallel-size 2 --gpu-memory-utilization 0.9 --chat_template /models-template/starcode.jinja
+    command: --model bartowski/starcoder2-15b-instruct-v0.1-GGUF --trust-remote-code --tensor-parallel-size 2 --gpu-memory-utilization 0.9 --chat_template /models-template/starcode.jinja
 #    command: --model /models/Mistral-Small-3.2-24B-Instruct-2506-Q8_0.gguf --trust-remote-code --tensor-parallel-size 2 --gpu-memory-utilization 0.95
         #    command: --model nvidia/Llama-3.1-Nemotron-Nano-8B-v1 --trust-remote-code --tensor-parallel-size 2 --gpu-memory-utilization 0.95
     restart: unless-stopped
