@@ -12,7 +12,7 @@ services:
       - ~/vllm/llm/models:/models
     ports:
       - "80:8000"
-    command: --model /models/Magistral-Small-2506_Q8_0.gguf --trust-remote-code --tensor-parallel-size 2 --gpu-memory-utilization 0.9 
+    command: --model /models/Magistral-Small-2506_Q8_0.gguf --trust-remote-code --tensor-parallel-size 2 
     restart: unless-stopped
     deploy:
       resources:
