@@ -13,6 +13,8 @@ services:
     ports:
       - "50002:8000"
     command: --model intfloat/multilingual-e5-large-instruct --trust-remote-code --tensor-parallel-size 2
+    #command: --model nomic-ai/nomic-embed-text-v2-moe --trust-remote-code --tensor-parallel-size 2
+    #command: --model jinaai/jina-embeddings-v3 --trust-remote-code --tensor-parallel-size 2
     restart: unless-stopped
     deploy:
       resources:
