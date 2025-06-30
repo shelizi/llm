@@ -1,0 +1,28 @@
+version: "3.9"
+
+services:
+  gitlab:
+    image: "gitlab/gitlab-ce:latest"
+    container_name: gitlab
+    restart: always
+    hostname: "gitlab.local"
+
+    # IMPORTANT: Replace with the URL you will use to access GitLab.
+    # If you are not using HTTPS locally you can keep it as http.
+    environment:
+      GITLAB_OMNIBUS_CONFIG: |
+        external_url "http://gitlab.local"
+        gitlab_rails['gitlab_shell_ssh_port'] = 2222
+    ports:
+      - "80:80"     # HTTP access
+      - "443:443"   # HTTPS access
+      - "2222:22"   # SSH access
+
+    # Persist GitLab configuration, logs and data between container restarts.
+    volumes:
+      - "./config:/etc/gitlab"
+      - "./logs:/var/log/gitlab"
+      - "./data:/var/opt/gitlab"
+
+    # Increase shared memory to prevent PostgreSQL errors under heavy load.
+    shm_size: "256m"
