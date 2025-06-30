@@ -1,0 +1,23 @@
+version: '3.8'
+
+services:
+  vllm:
+    image: vllm/vllm-openai:latest
+    container_name: vllm-phi4-reasoning-plus
+    ipc: host
+    env_file:
+      - ../.env
+    volumes:
+      - ~/.cache/huggingface:/root/.cache/huggingface
+      - ~/vllm/llm/models:/models
+    ports:
+      - "80:8000"
+    command: --model cortecs/Phi-4-reasoning-plus-FP8-Dynamic --trust-remote-code --tensor-parallel-size 2 --gpu-memory-utilization 0.9
+    restart: unless-stopped
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
