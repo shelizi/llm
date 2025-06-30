@@ -1,5 +1,13 @@
-<s> [INST] <<SYS>>
+{% set messages = [
+    {'role': 'user', 'content': 'What are the three primary colors?'},
+    {'role': 'assistant', 'content': 'The three primary colors are red, yellow, and blue.'},
+    {'role': 'user', 'content': 'Can you give me an example of a secondary color?'}
+] %}
+{% set system_prompt = 'You are a helpful art teacher.' %}
+
+{# --- JINJA TEMPLATE START --- #}
+<s>[INST] {% if system_prompt %}<<SYS>>
 {{ system_prompt }}
 <</SYS>>
 
-{{ prompt }} [/INST]  </s>
+{% endif %}{% for message in messages %}{% if message.role == 'user' %}{{ message.content }} [/INST] {% elif message.role == 'assistant' %}{{ message.content }} </s><s>[INST] {% endif %}{% endfor %}
