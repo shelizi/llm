@@ -10,9 +10,10 @@ services:
     volumes:
       - ~/.cache/huggingface:/root/.cache/huggingface
       - ~/vllm/llm/models:/models
+      - ~/vllm/llm/models-template:/models-template
     ports:
       - "80:8000"
-    command: --model /models/codestral-22b-v0.1.Q8_0.gguf --trust-remote-code --tensor-parallel-size 2 --gpu-memory-utilization 0.9
+    command: --model /models/codestral-22b-v0.1.Q8_0.gguf --trust-remote-code --tensor-parallel-size 2 --gpu-memory-utilization 0.9 --chat_template /models-template/codestral.jinja
     restart: unless-stopped
     deploy:
       resources:
